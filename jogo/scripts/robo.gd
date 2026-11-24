@@ -6,6 +6,7 @@ var pr
 var j: Jogador
 var loc: Locais
 var falhas := 0
+var agacha := false
 var t0 := 0
 
 
@@ -18,13 +19,14 @@ func _ready() -> void:
 	Engine.max_physics_steps_per_frame = 24
 	t0 = Time.get_ticks_msec()
 	j = pr.jog
+	j.robotizado = true
 	loc = pr.fl.locais
 	pr.his.acabou.connect(func(q): diz("FINAL: " + q))
 	roda()
 
 
 func diz(s: String) -> void:
-	print("PASSO [%5.1fs] etapa=%d vida=%.0f frio=%.0f  %s" % [(Time.get_ticks_msec() - t0) / 1000.0, Jogo.etapa, j.vida, j.frio, s])
+	print("PASSO [%5.1fs] etapa=%d vida=%.0f frio=%.0f alt=%.1f vy=%.1f chao=%s  %s" % [(Time.get_ticks_msec() - t0) / 1000.0, Jogo.etapa, j.vida, j.frio, j.global_position.y - Mundo.altura(j.global_position.x, j.global_position.z), j.velocity.y, j.is_on_floor(), s])
 
 
 func seg(s: float) -> void:
@@ -83,7 +85,7 @@ func vai(p: Vector3, perto: float = 1.6, lim: float = 60.0, correr: bool = true)
 		var lado := 0.0
 		if parado > 0.9:
 			lado = 1.0 if fmod(parado, 2.4) < 1.2 else -1.0
-		j.robo = {"eixo": Vector2(lado, -1.0).normalized(), "correr": correr and parado < 0.5, "pular": parado > 0.6 and fmod(parado, 0.8) < 0.05}
+		j.robo = {"eixo": Vector2(lado, -1.0).normalized(), "agachar": agacha, "correr": correr and parado < 0.5, "pular": parado > 0.6 and fmod(parado, 0.8) < 0.05}
 		if parado > 9.0 or t > lim:
 			falhas += 1
 			diz("FALHA: preso em (%.1f, %.1f, %.1f) indo para (%.1f, %.1f)" % [j.global_position.x, j.global_position.y, j.global_position.z, p.x, p.z])
@@ -179,12 +181,22 @@ func roda() -> void:
 	pr.his.comecar(true)
 	await ate(func(): return Jogo.etapa >= 1 and not j.travado and not j.so_olhar, 60, "acordar")
 	diz("acordou")
+	var nf := 0
+	var afund := 0
+	for o in pr.fl.locais.find_children("*", "RigidBody3D", true, false):
+		nf += 1
+		if o.global_position.y < Mundo.altura(o.global_position.x, o.global_position.z) - 0.25: afund += 1
+	diz("objetos fisicos=%d afundados=%d" % [nf, afund])
+	await usa("lanterna")
 	await usa("jaqueta")
 	await usa("kit")
 	await usa("desenho")
 	await usa("bussola")
 	await ate(func(): return Jogo.etapa >= 2, 10, "etapa 2")
 	diz("saiu dos destrocos; itens=" + str(Jogo.itens))
+	if Teste.a.has("anom"):
+		await _anomalias()
+		return
 	if Teste.a.has("morte"):
 		pr.dir.emboscada(8.0)
 		await ate(func(): return Jogo.mortes > 0 or j.vida < 60.0, 60, "ataque")
@@ -251,7 +263,10 @@ func roda() -> void:
 	await ate(func(): return j.so_olhar, 5, "radio comecar")
 	await ate(func(): return not j.so_olhar, 90, "conversa do radio")
 	diz("radio terminou, escondendo")
-	await vai(tor.to_global(Vector3(1.8, Locais.H_TORRE, 1.9)), 0.5, 20, false)
+	await vai(tor.to_global(Vector3(1.0, Locais.H_TORRE, 0.9)), 0.4, 20, false)
+	agacha = true
+	await vai(tor.to_global(Vector3(1.9, Locais.H_TORRE, 1.7)), 0.45, 20, false)
+	agacha = false
 	j.robo = {"agachar": true}
 	await seg(1.0)
 	diz("esconderijo=%s agachado=%s" % [j.esconderijo, j.agachado])
@@ -289,6 +304,64 @@ func roda() -> void:
 		await seg(1.0)
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(Teste.a.foto)
+	get_tree().quit()
+
+
+## dispara cada susto e confere a leitura protegida e a fisica
+func _anomalias() -> void:
+	var an: Anomalias = Jogo.anomalias
+	if Teste.a.anom != "2": await vai(xz(-289, -272), 2.0)
+	j.lanterna.ligada = true
+	Jogo.etapa = 3
+	for q in (["longe", "acena", "grupo", "corre", "passos", "sussurro", "galho", "lua", "poltrona", "costas", "apagao"] if Teste.a.anom != "2" else []):
+		an.t = 999.0
+		an.fazer(q)
+		await seg(3.0)
+		var n := 0
+		for v in an.ativos:
+			if is_instance_valid(v): n += 1
+		diz("anomalia %s: ativos=%d medo=%.2f lua=%.2f" % [q, n, j.medo, pr.fl.lua_fator])
+	# chega perto da poltrona / de quem esta de costas
+	for v in an.ativos.duplicate():
+		if is_instance_valid(v) and v.has_meta("cena"):
+			j.por_em(v.global_position + Vector3(2.5, 0.2, 2.5), 0.0)
+			await seg(4.0)
+	diz("depois de chegar perto: ativos=%d" % an.ativos.size())
+	# leitura protegida: a criatura congela
+	Jogo.etapa = 5
+	j.por_em(Mundo.chao(-289, -272), 0.0)
+	pr.cri.colocar(j.global_position + Vector3(9, 0, 0), j.global_position)
+	pr.cri.ultimo_visto = j.global_position
+	pr.cri.muda(Criatura.E.CACA)
+	pr.hud.abrir_nota("teste", "texto")
+	var p0: Vector3 = pr.cri.global_position
+	for k in 6:
+		await seg(0.5)
+		diz("   leitura: lendo=%s estado=%d andou=%.2f vis=%s" % [pr.hud.lendo, pr.cri.estado, pr.cri.global_position.distance_to(p0), pr.cri.visible])
+	diz("lendo com a criatura a 9 m: ela andou %.2f m, vida=%.0f" % [pr.cri.global_position.distance_to(p0), j.vida])
+	pr.hud.fechar_nota()
+	pr.cri.esconder()
+	# empurrar uma mala andando contra ela
+	var cont := 0
+	for m in pr.fl.locais.find_children("*", "RigidBody3D", true, false):
+		if not (m.nome in ["mala", "caixote", "poltrona", "lata"]) or cont >= 9: continue
+		cont += 1
+		var m0: Vector3 = m.global_position
+		j.por_em(m0 + Vector3(0.4, 0.3, 1.7), 0.0)
+		await seg(0.5)
+		j.robo = {"eixo": Vector2(0, -1)}
+		var tocou := {}
+		for k in 90:
+			var d: Vector3 = m.global_position - j.global_position
+			j.rotation.y = atan2(-d.x, -d.z)
+			await get_tree().physics_frame
+			for c in j.get_slide_collision_count():
+				var col: Node = j.get_slide_collision(c).get_collider()
+				var nm: String = col.nome if col is ObjetoFisico else (str(col.get_parent().name) + "/" + col.get_class())
+				tocou["%s ny=%.1f" % [nm, j.get_slide_collision(c).get_normal().y]] = true
+		j.robo = {}
+		diz("empurrei %s (%.0f kg): moveu %.2f m, dist=%.2f tocou=%s" % [m.nome, m.mass, m.global_position.distance_to(m0), Vector2(m.global_position.x - j.global_position.x, m.global_position.z - j.global_position.z).length(), tocou.keys().slice(0, 5)])
+	diz("ANOMALIAS ok")
 	get_tree().quit()
 
 

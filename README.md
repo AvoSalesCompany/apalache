@@ -4,14 +4,14 @@ Terror e sobrevivência em primeira pessoa para PC, feito em Godot 4.7.
 
 Outubro de 1987. O voo 609 cai de madrugada no meio dos montes Apalaches. As poltronas
 estão vazias, os cintos continuam afivelados e alguma coisa na mata já sabe o seu nome.
-A única luz é a da lua. Ache a civilização.
+A lua mal entra na mata e a lanterna não dura para sempre. Ache a civilização.
 
 ![Menu](docs/menu.jpg)
 
 | | |
 |---|---|
-| ![Riacho](docs/riacho.jpg) | ![Destroços](docs/destrocos.jpg) |
-| ![Olhos](docs/olhos.jpg) | ![Rodovia](docs/rodovia.jpg) |
+| ![Cabine do voo 609](docs/cabine.jpg) | ![Destroços](docs/destrocos.jpg) |
+| ![Um dos dezoito](docs/vigia.jpg) | ![Riacho](docs/riacho.jpg) |
 
 ## Como jogar
 
@@ -26,18 +26,23 @@ A única luz é a da lua. Ache a civilização.
 |---|---|
 | WASD / mouse | andar / olhar |
 | Shift / Ctrl / Espaço | correr / agachar / pular e proteger a cabeça no avião |
-| E | usar (algumas coisas pedem segurar) |
+| E | usar, pegar e soltar objetos (algumas coisas pedem segurar) |
+| F | lanterna |
 | Q | gritar por socorro (pense bem) |
 | C | segurar a bússola |
-| F ou clique esquerdo | arremessar pedra para distrair |
+| Clique esquerdo | arremessar pedra ou objeto para distrair |
 | Botão direito | focar a visão |
 | H / Tab / Esc | curativo / caderno / pausa |
 
 Jogue com fones de ouvido: **os grilos são o seu radar.** Se o mato calar, ele está perto.
 
-## O que já existe (v0.1)
+## O que já existe (v0.2)
 
-- **Abertura:** voo noturno, luz que acompanha o avião, pane, turbulência e queda.
+- **Abertura:** turboélice regional dos anos 80 com janelas ovais, voo noturno, pane, turbulência e queda.
+- **Lanterna** com pilhas que acabam e que falha quando algo está perto. A luz também mostra você.
+- **Os dezoito:** passageiros parados na mata, de longe, olhando. Olhos que devolvem a luz, vultos, sustos.
+- **Começo seguro:** até sair da cabana a criatura só observa, e ler nunca é interrompido.
+- **Física:** tudo que é sólido tem colisão; malas, caixas, cadeiras e latas podem ser empurradas, pegas e jogadas.
 - **Mapa aberto** de 1 km²: 32 mil árvores, riacho, cabana, cemitério, torre de incêndio, ponte, rodovia e posto.
 - **O Chamador:** criatura com visão, audição e memória, que imita a voz de quem morreu.
 - **Diretor de tensão:** um segundo cérebro decide quando apertar e quando dar descanso.
@@ -65,6 +70,10 @@ docs/            design, pesquisa e imagens
 | Roteiro, notas, finais | `jogo/scripts/historia.gd` |
 | Ritmo do terror, vozes, luzes falsas | `jogo/scripts/diretor.gd` |
 | Comportamento da criatura | `jogo/scripts/criatura.gd` |
+| Vigias, vultos e sustos | `jogo/scripts/anomalias.gd` e `vigia.gd` |
+| Lanterna | `jogo/scripts/lanterna.gd` |
+| Modelo do avião | `jogo/scripts/aeronave.gd` |
+| Objetos com física | `jogo/scripts/objeto_fisico.gd` |
 | Andar, frio, fôlego | `jogo/scripts/jogador.gd` |
 | Luz da lua e neblina | `jogo/scripts/floresta.gd`, função `_luz_e_ceu` |
 | Posição dos lugares, rio e estradas | `jogo/scripts/mundo.gd`, depois rodar a ferramenta abaixo |

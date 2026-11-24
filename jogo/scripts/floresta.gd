@@ -17,6 +17,11 @@ var ar: Node3D
 var locais: Locais
 var foco := Vector3.ZERO          # de onde o streaming olha
 var pronta := false
+var lua_fator := 1.0
+var _lua_alvo := 1.0
+var _lua_t := 0.0
+const LUA_E := 0.40
+const RAIOS := 0.15
 
 var _malhas := []                 # tipo -> [lod0, lod1]
 var _rodo := []
@@ -80,7 +85,7 @@ func _luz_e_ceu() -> void:
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.36, 0.47, 0.70)
-	env.ambient_light_energy = 0.50
+	env.ambient_light_energy = 0.085
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_exposure = 1.55
@@ -98,7 +103,7 @@ func _luz_e_ceu() -> void:
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	env.fog_light_color = Color(0.085, 0.115, 0.175)
-	env.fog_light_energy = 0.32
+	env.fog_light_energy = 0.13
 	env.fog_density = 0.0075
 	env.fog_sky_affect = 0.0
 	env.fog_sun_scatter = 0.16
@@ -116,9 +121,9 @@ func _luz_e_ceu() -> void:
 
 	lua = DirectionalLight3D.new()
 	lua.light_color = Color(0.60, 0.73, 1.0)
-	lua.light_energy = 1.75
+	lua.light_energy = LUA_E
 	lua.light_angular_distance = 0.5
-	lua.light_volumetric_fog_energy = 1.45
+	lua.light_volumetric_fog_energy = 1.0
 	lua.shadow_enabled = true
 	lua.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	lua.directional_shadow_max_distance = 110.0
@@ -154,6 +159,14 @@ func opcoes_mudaram() -> void:
 	env.ssil_enabled = q >= 3
 	lua.directional_shadow_max_distance = [60.0, 85.0, 110.0, 140.0][q]
 	lua.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if q == 0 else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+
+
+## uma nuvem cobre a lua por alguns segundos: breu
+func cobrir_lua(s: float) -> void:
+	_lua_alvo = 0.04
+	_lua_t = s
+	if Jogo.jogador:
+		Jogo.falar("", "Uma nuvem cobre a lua.", 2.5)
 
 
 # ------------------------------------------------------------------ terreno
@@ -560,7 +573,7 @@ func _nevoas() -> void:
 
 # ------------------------------------------------------------------ colisao de troncos (piscina)
 func _colisores() -> void:
-	for i in 56:
+	for i in 72:
 		var b := StaticBody3D.new()
 		var c := CollisionShape3D.new()
 		var s := CylinderShape3D.new()
@@ -611,7 +624,7 @@ func _atualiza_colisores(_f: bool = false) -> void:
 			s.radius = maxf(0.08, Mundo.raio_tronco(id) * 1.05)
 			s.height = 5.0
 			cs.shape = s
-			cs.position = Vector3(0, 2.2, 0)
+			cs.transform = Transform3D(Basis.IDENTITY, Vector3(0, 2.2, 0))
 			b.transform = Transform3D(Basis.IDENTITY, Vector3(a[id * 6], a[id * 6 + 1], a[id * 6 + 2]))
 		else:
 			var i: int = id - 100000
@@ -625,17 +638,19 @@ func _atualiza_colisores(_f: bool = false) -> void:
 				var bx := BoxShape3D.new()
 				bx.size = sz * Vector3(0.86, 0.62, 0.62)
 				cs.shape = bx
-				cs.position = Vector3(0, sz.y * 0.36, 0)
+				cs.transform = Transform3D(Basis.IDENTITY, Vector3(0, sz.y * 0.36, 0))
 				b.transform = Transform3D(Basis(Quaternion(Vector3.UP, Mundo.normal(pos.x, pos.z))) * Basis(Vector3.UP, p[i * 6 + 3]), pos)
 			else:
-				var sp := CylinderShape3D.new()
-				sp.radius = minf(sz.x, sz.z) * 0.36
-				sp.height = maxf(0.1, sz.y * 0.85)
-				cs.shape = sp
-				cs.position = Vector3(0, sz.y * 0.42, 0)
-				b.transform = Transform3D(Basis.IDENTITY, pos)
+				# formato real da pedra / toco
+				if not _convexo.has(tp):
+					_convexo[tp] = (pc[0] as Mesh).create_convex_shape(true, true)
+				cs.shape = _convexo[tp]
+				var esc: float = pc[2] * e
+				cs.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * esc), Vector3.ZERO) * (pc[1] as Transform3D)
+				b.transform = Transform3D(Basis(Vector3.UP, p[i * 6 + 3]), pos)
 
 var _grade_ped := {}
+var _convexo := {}
 
 
 func _process(dt: float) -> void:
@@ -648,7 +663,15 @@ func _process(dt: float) -> void:
 	# no alto da torre a neblina fica embaixo e a vista abre
 	var alto := smoothstep(5.0, 13.0, foco.y - Mundo.altura(foco.x, foco.z))
 	env.fog_density = lerpf(0.0075, 0.0026, alto)
-	env.fog_light_energy = lerpf(0.32, 0.11, alto)
+	env.fog_light_energy = lerpf(0.055, 0.05, alto) * lerpf(0.35, 1.0, lua_fator)
+	# nuvem na frente da lua
+	_lua_t -= dt
+	if _lua_t <= 0.0: _lua_alvo = 1.0
+	lua_fator = move_toward(lua_fator, _lua_alvo, dt * (0.40 if _lua_alvo < lua_fator else 0.16))
+	lua.light_energy = LUA_E * lua_fator
+	mat_raios.set_shader_parameter("forca", RAIOS * lua_fator)
+	mat_ceu.set_shader_parameter("brilho", lerpf(0.06, 0.42, lua_fator))
+	env.ambient_light_energy = lerpf(0.022, 0.060, lua_fator)
 	env.volumetric_fog_density = lerpf(0.016, 0.0035, alto)
 	ar.global_position = foco
 	_t -= dt

@@ -30,7 +30,31 @@ func construir(f: Floresta, passo: Callable) -> void:
 	_ponte()
 	_posto()
 	_caminhonete()
+	colidir(self)
 	await passo.call("Acendendo a cidade", 0.97)
+
+
+## tudo que e solido ganha colisao com o formato real da malha
+func colidir(no: Node) -> void:
+	for f in no.get_children():
+		if f is RigidBody3D or f is StaticBody3D or f is Interativo or f.is_in_group("sem_col") or f == porta or f == portao or f == caminhonete:
+			continue
+		if f is MeshInstance3D and f.mesh and not (f.mesh is QuadMesh) and not (f.mesh is SphereMesh):
+			var bb: AABB = f.mesh.get_aabb()
+			var tam: Vector3 = bb.size * f.global_transform.basis.get_scale()
+			if maxf(tam.x, maxf(tam.y, tam.z)) > 0.22 and tam.y > 0.03:
+				var tris := 0
+				for s in f.mesh.get_surface_count():
+					if f.mesh is ArrayMesh:
+						tris += maxi(f.mesh.surface_get_array_index_len(s), 3) / 3
+				var forma: Shape3D = f.mesh.create_trimesh_shape() if tris < 14000 else f.mesh.create_convex_shape(true, true)
+				if forma:
+					var sb := StaticBody3D.new()
+					var cs := CollisionShape3D.new()
+					cs.shape = forma
+					sb.add_child(cs)
+					f.add_child(sb)
+		colidir(f)
 
 
 func ocupado(x: float, z: float) -> bool:
@@ -95,34 +119,32 @@ func _queda() -> void:
 	rng.seed = 77
 	var falhas := {}
 	for b in 9:
-		for s in 20:
-			var borda := maxf(0.0, 1.0 - b / 2.0)
-			var pr := 0.02 + borda * 0.50
-			if b >= 8: pr = 0.25
-			falhas[b * 100 + s] = rng.randf() < pr
-	# rombo lateral por onde o jogador sai
+		for s in 12:
+			var pr := 0.05
+			if b >= 7: pr = 0.16
+			if b >= 8: pr = 0.40
+			falhas[b * 100 + s] = rng.randf() < pr and not (s in [0, 6])
+	# rombo lateral por onde se entra (lado direito)
 	for b in [3, 4, 5]:
-		for s in [1, 2, 3, 4, 5, 6, 7]:
-			falhas[b * 100 + s] = not (b == 5 and s in [6, 7])
-	Aeronave.casco(g, 9, -3.6, func(b, s): return falhas.get(b * 100 + s, false))
+		for s in [1, 2, 3, 4]:
+			falhas[b * 100 + s] = not (b == 5 and s == 4)
+	var fr := func(b, s): return falhas.get(b * 100 + s, false)
+	Aeronave.casco(g, 9, -3.6, fr, 0.75, false, 1.0)
+	Aeronave.esqueleto(g, 9, -3.6)
+	Aeronave.rasgo(g, 3.6, 1.0, 5)
+	Aeronave.rasgo(g, 3.4, 1.0, 11)
 	Aeronave.piso(g, 7.2, -3.6)
-	Aeronave.bagageiro(g, 6.0, -2.6)
-	Aeronave.fileiras(g, 8, -3.0, [[3, 2], [3, 3], [4, 3], [0, 1], [1, 0]])
-	Aeronave.cockpit(g, -3.6 - 0.6)
+	Aeronave.fileiras(g, 8, -3.2, [[3, 1], [3, 2], [4, 2], [4, 1], [4, 0], [0, 0], [1, 0], [2, 0], [3, 0], [5, 0], [6, 0], [7, 1], [7, 2], [5, 2]])
+	Aeronave.cockpit(g, -3.6, 0.85, 1.0)
 	var cb := corpo(g)
-	bx(cb, Vector3(0, Aeronave.PISO - 0.1, 0), Vector3(2.4, 0.2, 7.2))
-	bx(cb, Vector3(-1.42, 0.1, 0), Vector3(0.12, 2.4, 7.2))
-	bx(cb, Vector3(1.42, 0.1, -2.4), Vector3(0.12, 2.4, 2.4))
-	bx(cb, Vector3(1.42, 0.1, 2.5), Vector3(0.12, 2.4, 2.2))
-	bx(cb, Vector3(0, 0, -4.6), Vector3(2.6, 2.6, 1.4))
-	for k in 8:
-		for sx in [-1.0, 1.0]:
-			if sx > 0 and k in [3, 4]: continue
-			bx(cb, Vector3(0.74 * sx, -0.35, -2.6 + k * 0.8), Vector3(0.95, 0.9, 0.35))
+	bx(cb, Vector3(0, Aeronave.PISO - 0.1, 0), Vector3(1.8, 0.2, 7.2))
+	bx(cb, Vector3(0, 0, -3.7), Vector3(2.2, 2.2, 0.2))
+	# degrau de terra para entrar pelo rombo
+	bx(cb, Vector3(1.35, Aeronave.PISO - 0.28, 0.0), Vector3(1.1, 0.5, 2.3), Vector3(0, 0, -0.35))
 	# mascaras penduradas
 	for k in 10:
 		var m := Malha.new()
-		var p := Vector3(rng.randf_range(-0.6, 0.6), 0.72, -2.6 + k * 0.62)
+		var p := Vector3(rng.randf_range(-0.5, 0.5), 0.80, -2.6 + k * 0.55)
 		var q := p + Vector3(rng.randf_range(-0.15, 0.05), -rng.randf_range(0.4, 0.75), rng.randf_range(-0.1, 0.1))
 		m.tubo([p, p.lerp(q, 0.5) + Vector3(0.04, 0, 0.03), q], [0.006, 0.006, 0.006], 4)
 		m.tubo([q, q + Vector3(0, -0.07, 0)], [0.03, 0.045], 8)
@@ -133,24 +155,35 @@ func _queda() -> void:
 	var t := grupo(pc + Vector3(0, 0.9, 0), dir + 0.6)
 	t.rotation.z = -0.5
 	t.rotation.x = 0.12
-	Aeronave.casco(t, 5, -2.0, func(b, s): return (b == 0 and rng.randf() < 0.6) or rng.randf() < 0.04)
+	Aeronave.casco(t, 4, -1.2, func(b, s): return b == 0 and s in [3, 4, 5, 9], 0.8, false, 1.0)
+	Aeronave.esqueleto(t, 4, -1.2)
+	Aeronave.rasgo(t, -1.2, -1.0, 21)
+	Aeronave.rasgo(t, -1.0, -1.0, 22)
+	Aeronave.piso(t, 2.6, -0.8)
 	var ct := Malha.new()
-	ct.tubo([Vector3(0, 0, 2.0), Vector3(0, 0.15, 3.6), Vector3(0, 0.4, 5.4)], [1.46, 1.0, 0.35], 20, 0.6, 3.0, Color(0, 0, 0.5), true)
-	ct.cx(Vector3(0, 2.1, 5.0), Vector3(0.14, 3.4, 1.5), Vector3(-0.32, 0, 0))
-	ct.cx(Vector3(0, 3.5, 5.6), Vector3(4.4, 0.10, 1.0))
-	ct.no(Mat.pbr("blue_metal_plate", 1.0, Color(0.74, 0.76, 0.78), 0.7, 0.35), t)
+	ct.tubo([Vector3(0, 0, 2.0), Vector3(0, 0.03, 2.8), Vector3(0, 0.15, 3.8), Vector3(0, 0.33, 4.9), Vector3(0, 0.45, 5.6)], [1.22, 1.12, 0.82, 0.42, 0.12], 30, 1.0, 7.6, Color(0, 0, 0.5), true)
+	ct.no(Aeronave.m_casco(0.7, 0.6), t)
+	var ep := Malha.new()
+	for q in 9:
+		var f := q / 8.0
+		ep.cx(Vector3(0, 0.55 + f * 2.6, 4.35 + f * 1.05), Vector3(0.15 - f * 0.07, 0.36, 1.75 - f * 0.75))
+	for sx in [-1.0, 1.0]:
+		for q in 8:
+			var f := q / 7.0
+			if sx > 0 and q > 4: continue
+			ep.cx(Vector3((0.15 + f * 2.1) * sx, 3.02 + 0.02 * q, 5.2 + f * 0.25), Vector3(0.34, 0.11 - f * 0.05, 0.95 - f * 0.35))
+	ep.no(Aeronave.m_casco(0.45, 0.0), t)
 	var tb := corpo(t)
-	bx(tb, Vector3(0, 0, 1.2), Vector3(2.6, 2.4, 6.0))
+	bx(tb, Vector3(0, 0, 4.6), Vector3(1.0, 1.0, 2.0))
 	# asa arrancada
 	var pa := Mundo.chaov(Mundo.QUEDA + dv * 11.0 + Vector2(dv.y, -dv.x) * -9.0)
 	var a := grupo(pa + Vector3(0, 1.0, 0), dir + 1.15)
 	a.rotation.z = 0.34
-	Aeronave.asa(a, 1.0)
+	var asa_q := Aeronave.asa(a, 1.0, true)
 	var ab := corpo(a)
-	bx(ab, Vector3(4.5, 0.2, 0), Vector3(8, 0.4, 2))
-	bx(ab, Vector3(3.4, 0.0, -0.6), Vector3(0.9, 0.9, 3.2))
+	bx(ab, Vector3(5.0, -0.15, 0.1), Vector3(8, 0.2, 1.4), Vector3(0, 0, 0.06))
 	# fogo: motor + chao + cauda
-	fogos.append(Fx.fogo(self, a.to_global(Vector3(3.4, 0.3, -0.4)), 1.35, 6.5, 26.0))
+	fogos.append(Fx.fogo(self, a.to_global(Vector3(2.7, 0.15, -0.6)), 1.35, 6.5, 26.0))
 	fogos.append(Fx.fogo(self, Mundo.chaov(Mundo.QUEDA + Vector2(6.5, 4.0)) + Vector3.UP * 0.1, 0.6, 2.6, 12.0, false))
 	fogos.append(Fx.fogo(self, Mundo.chaov(Mundo.QUEDA + dv * 22.0) + Vector3.UP * 0.1, 0.8, 3.0, 14.0, false))
 	Fx.fumaca(self, c + Vector3(0, 2.2, 0), 1.4, 20)
@@ -184,32 +217,24 @@ func _queda() -> void:
 	md.no(Mat.pbr("blue_metal_plate", 1.0, Color(0.6, 0.62, 0.64), 0.8, 0.3), self)
 	for i in 9:
 		var p := Mundo.chaov(Mundo.QUEDA + dv * rng.randf_range(-9, 26) + Vector2(dv.y, -dv.x) * rng.randf_range(-9, 9))
-		var mala := Malha.new()
 		var tm := Vector3(rng.randf_range(0.45, 0.7), rng.randf_range(0.16, 0.24), rng.randf_range(0.32, 0.45))
-		var rr := Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, rng.randf_range(-0.2, 0.2))
-		mala.cx(p + Vector3.UP * 0.1, tm, rr)
-		mala.cx(p + Vector3.UP * 0.1, tm * Vector3(1.02, 0.1, 1.02), rr)
-		mala.no(Mat.liso([Color(0.18, 0.08, 0.05), Color(0.05, 0.07, 0.12), Color(0.12, 0.12, 0.10)][i % 3], 0.6), self)
+		ObjetoFisico.mala(self, p + Vector3.UP * 0.5, tm, rng.randf() * TAU, [Color(0.18, 0.08, 0.05), Color(0.05, 0.07, 0.12), Color(0.12, 0.12, 0.10)][i % 3])
 	for i in 5:
 		var p := Mundo.chaov(Mundo.QUEDA + dv * rng.randf_range(2, 24) + Vector2(dv.y, -dv.x) * rng.randf_range(-8, 8))
-		var s := MeshInstance3D.new()
-		s.mesh = Aeronave.poltrona()
-		s.position = p + Vector3.UP * 0.2
-		s.rotation = Vector3(rng.randf_range(-1.7, 0.2), rng.randf() * TAU, rng.randf_range(-0.6, 0.6))
-		add_child(s)
+		var s := ObjetoFisico.poltrona(self, p + Vector3.UP * 0.7, Vector3(rng.randf_range(-1.7, 0.2), rng.randf() * TAU, rng.randf_range(-0.6, 0.6)))
 
 	# ---- itens
 	var jq := Malha.new()
 	for i in 4:
 		jq.tubo([Vector3(-0.2 + i * 0.04, 0.02 + i * 0.035, 0.14), Vector3(0, 0.05 + i * 0.035, 0.0), Vector3(0.2 - i * 0.03, 0.02 + i * 0.03, -0.12)], [0.06, 0.08, 0.05], 7, 1, 1, Color(0, 0, 0.5), true)
 	var jn := jq.no(Mat.pbr("fabric_pattern_07", 2.0, Color(0.42, 0.24, 0.10)), g)
-	jn.position = Vector3(-0.50, Aeronave.PISO + 0.48, 0.35)
+	jn.position = Vector3(Aeronave.BANCOS[1], Aeronave.PISO + 0.50, -3.2 + 5.5 * 0.8 - 0.05)
 	nos["jaqueta"] = jn
 	it["jaqueta"] = Interativo.criar(g, jn.position + Vector3(0, 0.15, 0), "Pegar jaqueta", func(): Jogo.historia.pegar("jaqueta"), 2.2)
 	# kit de primeiros socorros
 	var kt := Node3D.new()
 	g.add_child(kt)
-	kt.position = Vector3(0.9, Aeronave.PISO + 0.12, 1.2)
+	kt.position = Vector3(-0.5, Aeronave.PISO + 0.12, 1.3)
 	var km := Malha.new()
 	km.cx(Vector3.ZERO, Vector3(0.36, 0.2, 0.26), Vector3(0, 0.4, 0))
 	km.no(Mat.liso(Color(0.55, 0.05, 0.04), 0.5), kt)
@@ -234,11 +259,77 @@ func _queda() -> void:
 	var bi := Malha.new()
 	bi.cx(Vector3.ZERO, Vector3(0.2, 0.004, 0.28), Vector3(0, 0.3, 0))
 	var bin := bi.no(Mat.liso(Color(0.72, 0.68, 0.58), 0.9), g)
-	bin.position = Vector3(0.50, Aeronave.PISO + 0.50, -1.0)
+	bin.position = Vector3(Aeronave.BANCOS[1], Aeronave.PISO + 0.485, -3.2 + 2.5 * 0.8 - 0.05)
 	it["desenho"] = Interativo.criar(g, bin.position, "Ler saco de papel", func(): Jogo.historia.ler_nota("desenho"), 2.2)
-	# onde o jogador acorda
-	var ac := g.to_global(Vector3(2.9, 0, 0.4))
+	# onde o jogador acorda; perto dali, uma lanterna acesa no chao
+	var ac := g.to_global(Vector3(3.4, 0, 0.6))
 	nos["acorda"] = grupo(Vector3(ac.x, Mundo.altura(ac.x, ac.z), ac.z))
+	var lp2 := g.to_global(Vector3(4.7, 0, -1.5))
+	var ln := grupo(Vector3(lp2.x, Mundo.altura(lp2.x, lp2.z) + 0.045, lp2.z))
+	var longe := g.to_global(Vector3(13.0, 0, -15.0))
+	ln.look_at(Vector3(longe.x, Mundo.altura(longe.x, longe.z) + 1.5, longe.z))
+	nos["lanterna"] = ln
+	var lmat := Lanterna.modelo(ln)
+	lmat.emission_energy_multiplier = 9.0
+	var lsp := Lanterna.spot(ln)
+	lsp.position = Vector3(0, 0, -0.15)
+	lsp.light_energy = 5.0
+	nos["lanterna_luz"] = lsp
+	it["lanterna"] = Interativo.criar(self, ln.position + Vector3.UP * 0.05, "Pegar lanterna", func(): Jogo.historia.pegar("lanterna"), 2.4)
+	# pilhas
+	_pilhas("pilha1", self, t.to_global(Vector3(0.3, Aeronave.PISO + 0.12, 0.4)))
+	# caixotes soltos
+	for q in [Vector3(6.4, 0, 2.2), Vector3(6.9, 0, 1.3), Vector3(-4.6, 0, 3.0)]:
+		var cp := g.to_global(q)
+		ObjetoFisico.movel(self, "wooden_crate_01", Mundo.chao(cp.x, cp.z) + Vector3.UP * 0.1, rng.randf() * TAU, 0.45, 7.0, "caixote")
+	for k in 6:
+		var lt := Mundo.chaov(Mundo.QUEDA + dv * rng.randf_range(-6, 14) + Vector2(dv.y, -dv.x) * rng.randf_range(-7, 7))
+		ObjetoFisico.lata(self, lt + Vector3.UP * 0.4)
+	# fagulhas nos fios rasgados
+	for q in [Vector3(0.6, 0.7, 3.7), Vector3(-0.9, 0.2, 3.6)]:
+		_fagulha(g, q)
+
+
+func _pilhas(id: String, pai: Node3D, pos: Vector3) -> void:
+	var n := Node3D.new()
+	pai.add_child(n)
+	n.position = pos
+	var m := Malha.new()
+	var m2 := Malha.new()
+	for i in 2:
+		var o := Vector3(i * 0.045, 0.017, i * 0.02)
+		m.tubo([o, o + Vector3(0.01, 0, 0.042)], [0.0165, 0.0165], 14, 1, 1, Color(0, 0, 0.5), true)
+		m2.tubo([o + Vector3(0.01, 0, 0.042), o + Vector3(0.014, 0, 0.060)], [0.0168, 0.0168], 14, 1, 1, Color(0, 0, 0.5), true)
+	m.no(Mat.liso(Color(0.02, 0.02, 0.02), 0.35), n)
+	m2.no(Mat.liso(Color(0.62, 0.40, 0.12), 0.25, 0.9), n)
+	n.add_to_group("sem_col")
+	nos[id] = n
+	it[id] = Interativo.criar(pai, pos + Vector3.UP * 0.05, "Pegar pilhas", func(): Jogo.historia.pegar(id), 2.2)
+
+
+func _fagulha(pai: Node3D, pos: Vector3) -> void:
+	var p := GPUParticles3D.new()
+	p.amount = 24
+	p.lifetime = 0.7
+	p.explosiveness = 0.85
+	var m := ParticleProcessMaterial.new()
+	m.direction = Vector3(0, 0.3, 1)
+	m.spread = 70
+	m.initial_velocity_min = 0.6
+	m.initial_velocity_max = 2.8
+	m.gravity = Vector3(0, -6, 0)
+	m.scale_min = 0.008
+	m.scale_max = 0.020
+	m.color_ramp = Fx._rampa([[0, Color(0.8, 0.9, 1, 1)], [0.4, Color(1, 0.7, 0.3, 1)], [1, Color(1, 0.2, 0.0, 0)]])
+	p.process_material = m
+	var q := QuadMesh.new()
+	q.material = Mat.sprite(Color(1, 1, 1), 8.0, true)
+	p.draw_pass_1 = q
+	p.position = pos
+	p.lifetime = 0.8
+	p.randomness = 1.0
+	p.speed_scale = 0.7
+	pai.add_child(p)
 
 
 # =================================================================== PLACA
@@ -372,15 +463,18 @@ func _cabana() -> void:
 	# degraus da varanda
 	# moveis
 	prop(g, "WoodenTable_01", Vector3(1.6, 0, -1.3), 0.0, 0.78)
-	prop(g, "WoodenChair_01", Vector3(1.0, 0, -0.8), 2.2, 0.9)
+	ObjetoFisico.movel(g, "WoodenChair_01", Vector3(1.0, 0.02, -0.75), 2.2, 0.9, 5.0, "cadeira")
+	for k in 4:
+		ObjetoFisico.lata(g, Vector3(1.9 + k * 0.09, 0.90, -1.1 + 0.05 * (k % 2)), [Color(0.4, 0.1, 0.06), Color(0.15, 0.25, 0.12), Color(0.45, 0.36, 0.12), Color(0.3, 0.3, 0.32)][k])
+	ObjetoFisico.movel(g, "wooden_crate_01", Vector3(-0.4, 0.02, -1.9), 0.3, 0.42, 6.0, "caixote")
+	_pilhas("pilha2", g, Vector3(2.35, 1.51, 1.62))
 	prop(g, "old_bed_frame", Vector3(-2.0, 0, -1.2), 0.0, 1.0)
 	prop(g, "barrel_stove", Vector3(-2.35, 0, 0.75), PI * 0.5, 1.0)
 	prop(g, "painted_wooden_cabinet", Vector3(2.45, 0, 1.4), -PI * 0.5, 1.5)
-	prop(g, "wooden_lantern_01", Vector3(1.9, 0.79, -1.5), 0.3, 0.34)
+	ObjetoFisico.movel(g, "wooden_lantern_01", Vector3(1.55, 0.80, -1.5), 0.3, 0.34, 1.6, "lampião")
 	prop(g, "Rockingchair_01", Vector3(-1.9, -0.02, D + 0.9), 0.4, 1.05)
 	prop(g, "wooden_axe", Vector3(2.75, 0.02, 0.5), 0.0, 0.0, "y", Vector3(0.0, 0, 0.2))
-	nos["balanco"] = g.get_child(g.get_child_count() - 2)
-	bx(b, Vector3(1.6, 0.4, -1.3), Vector3(1.3, 0.8, 0.7))
+	bx(b, Vector3(1.6, 0.76, -1.3), Vector3(1.3, 0.05, 0.7))
 	bx(b, Vector3(-2.0, 0.3, -1.2), Vector3(1.0, 0.6, 1.9))
 	bx(b, Vector3(-2.35, 0.5, 0.75), Vector3(0.7, 1.0, 0.9))
 	bx(b, Vector3(2.5, 0.8, 1.4), Vector3(0.5, 1.6, 1.0))
@@ -520,7 +614,7 @@ func _torre() -> void:
 		var w1 := lerpf(3.3, 2.5, y1 / H)
 		for s in [[Vector3(1, 0, 1), Vector3(-1, 0, 1)], [Vector3(1, 0, -1), Vector3(-1, 0, -1)], [Vector3(1, 0, 1), Vector3(1, 0, -1)], [Vector3(-1, 0, 1), Vector3(-1, 0, -1)]]:
 			m.viga(s[0] * w1 + Vector3.UP * y1, s[1] * w1 + Vector3.UP * y1, 0.11)
-			if i == 0 and s[0].z == 1 and s[1].z == 1: continue
+			if i == 0 and s[0].x == -1 and s[1].x == -1: continue
 			m.viga(s[0] * w0 + Vector3.UP * y0, s[1] * w1 + Vector3.UP * y1, 0.07)
 			m.viga(s[1] * w0 + Vector3.UP * y0, s[0] * w1 + Vector3.UP * y1, 0.07)
 	m.no(Mat.pbr("rusty_metal_02", 0.8, Color(0.55, 0.5, 0.46), 0.9, 0.3), g)
@@ -553,7 +647,7 @@ func _torre() -> void:
 			bx(b, Vector3(lx + 0.46 * signf(x1), y0 + 3.6, 0), Vector3(0.06, 1.3, 2.3))
 			bx(b, Vector3(lx, y0 + 3.6, 1.16), Vector3(0.9, 1.3, 0.06))
 			bx(b, Vector3(lx, y0 + 3.6, -1.16), Vector3(0.9, 1.3, 0.06))
-	es.no(Mat.pbr("rusty_metal_02", 1.0, Color(0.5, 0.47, 0.44), 0.85, 0.35), g)
+	es.no(Mat.pbr("rusty_metal_02", 1.0, Color(0.5, 0.47, 0.44), 0.85, 0.35), g).add_to_group("sem_col")
 	# cabine: piso com alcapao sobre o ultimo lance
 	var cb := Malha.new()
 	var pisos := [[Vector3(0, H, 1.35), Vector3(5.4, 0.1, 2.7)], [Vector3(0, H, -1.92), Vector3(5.4, 0.1, 1.56)], [Vector3(-1.95, H, -0.57), Vector3(1.5, 0.1, 1.14)], [Vector3(2.15, H, -0.57), Vector3(1.1, 0.1, 1.14)]]
@@ -587,7 +681,10 @@ func _torre() -> void:
 	# mesa e radio
 	prop(g, "WoodenTable_01", Vector3(-1.75, H + 0.05, 1.9), 0.0, 0.80)
 	prop(g, "vintage_radio_transceiver", Vector3(-1.75, H + 0.86, 1.9), PI, 0.34)
-	prop(g, "WoodenChair_01", Vector3(-1.2, H + 0.05, 1.2), 2.8, 0.9)
+	ObjetoFisico.movel(g, "WoodenChair_01", Vector3(-1.1, H + 0.07, 1.1), 2.8, 0.9, 5.0, "cadeira")
+	for k in 3:
+		ObjetoFisico.lata(g, Vector3(-1.2 - k * 0.1, H + 0.95, 2.05))
+	_pilhas("pilha3", g, Vector3(-2.15, H + 0.87, 1.75))
 	bx(b, Vector3(-1.75, H + 0.80, 1.9), Vector3(1.3, 0.1, 0.8))
 	it["radio"] = Interativo.criar(g, Vector3(-1.75, H + 1.0, 1.75), "Ligar o rádio", func(): Jogo.historia.radio(), 2.2, 1.2)
 	var bi := Malha.new()
@@ -597,8 +694,8 @@ func _torre() -> void:
 	it["livro"] = Interativo.criar(g, bn.position, "Ler livro da torre", func(): Jogo.historia.ler_nota("torre"), 2.0)
 	# esconderijo: armario caido / lona no canto
 	var lo := Malha.new()
-	lo.cx(Vector3(1.9, H + 0.62, 2.0), Vector3(1.1, 0.06, 0.95), Vector3(0, 0, 0.05))
-	lo.cx(Vector3(1.35, H + 0.3, 2.0), Vector3(0.05, 0.6, 0.9), Vector3(0, 0, 0.08))
+	lo.cx(Vector3(1.9, H + 1.22, 2.0), Vector3(1.25, 0.05, 1.05), Vector3(0, 0, 0.03))
+	lo.cx(Vector3(1.28, H + 0.62, 2.22), Vector3(0.05, 1.2, 0.62), Vector3(0, 0, 0.02))
 	lo.no(Mat.pbr("green_metal_rust", 1.0, Color(0.5, 0.55, 0.5)), g)
 	esconderijo_torre = g.to_global(Vector3(1.9, H + 0.05, 2.0))
 	cabine_torre = g.to_global(Vector3(0, H + 0.1, 1.2))
@@ -675,7 +772,7 @@ func _ponte() -> void:
 		for q in [0.3, 0.7]:
 			var p = pa.lerp(pb, q) + lado * 1.3 * s
 			m.viga(p - Vector3.UP * 0.3, Vector3(p.x, Mundo.altura(p.x, p.z) - 0.5, p.z) + lado * 0.3 * s, 0.26, 0.5)
-	m.no(Mat.pbr("weathered_brown_planks", 1.0, Color(0.62, 0.57, 0.52)), g)
+	m.no(Mat.pbr("weathered_brown_planks", 1.0, Color(0.62, 0.57, 0.52)), g).add_to_group("sem_col")
 	var c := corpo(g)
 	var sh := CollisionShape3D.new()
 	var bxs := BoxShape3D.new()

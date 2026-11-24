@@ -41,7 +41,7 @@ func _process(dt: float) -> void:
 	if j == null or Jogo.floresta == null or not Jogo.floresta.visible:
 		return
 	_sons(dt, j)
-	if not ligado or j.morto:
+	if not ligado or j.morto or Jogo.hud.lendo:
 		return
 	_luzes_anda(dt, j)
 	var c := _cr()
@@ -58,6 +58,9 @@ func _process(dt: float) -> void:
 	if ganho > 0.0: tensao = minf(1.0, tensao + ganho * dt)
 	else: tensao = maxf(0.0, tensao - dt * 0.018)
 	# silencio: a mata cala quando ele esta perto
+	# interferencia na lanterna
+	var dc := c.dist_jog() if c.visible else 99.0
+	j.lanterna.falha = move_toward(j.lanterna.falha, clampf(1.0 - dc / 24.0, 0.0, 0.85), dt)
 	var perto := c.visible and c.dist_jog() < 48.0
 	silencio_alvo = 1.0 if perto or chamando > 0.0 else 0.0
 	_t_est -= dt
@@ -80,7 +83,7 @@ func _process(dt: float) -> void:
 		chamando = 0.0
 		Jogo.falar("", "Não tem ninguém aqui.", 2.5)
 		emboscada(16.0)
-	if t_voz <= 0.0 and c.estado in [Criatura.E.OCULTO, Criatura.E.OBSERVA] and not j.abrigado and Jogo.etapa >= 2:
+	if t_voz <= 0.0 and c.estado in [Criatura.E.OCULTO, Criatura.E.OBSERVA] and not j.abrigado and Jogo.etapa >= 3:
 		t_voz = randf_range(70.0, 130.0) * lerpf(1.1, 0.7, agressao)
 		chamar()
 
@@ -92,20 +95,24 @@ func _abrir(j, c: Criatura) -> void:
 	if Jogo.etapa < 2:
 		alivio = 20.0
 		return
+	var calmo: bool = Jogo.etapa < 4      # no comeco ele so observa, de longe
 	# observa de longe ou ronda
 	var fr: Vector3 = -j.cam.global_transform.basis.z
 	fr.y = 0
 	fr = fr.normalized()
-	if randf() < lerpf(0.75, 0.30, agressao):
+	if calmo or randf() < lerpf(0.75, 0.30, agressao):
 		for t in 12:
 			var a := randf_range(-0.75, 0.75)
-			var d := randf_range(24.0, 38.0)
+			var d := randf_range(32.0, 46.0) if calmo else randf_range(24.0, 38.0)
 			var p: Vector3 = j.global_position + fr.rotated(Vector3.UP, a) * d
 			if _livre(p) and Mundo.obstrucao(j.cam.global_position, Mundo.chao(p.x, p.z) + Vector3.UP * 1.6) < 0.5:
 				c.colocar(p, j.global_position)
 				c.muda(Criatura.E.OBSERVA)
-				alivio = 45.0
+				alivio = 75.0 if calmo else 45.0
 				return
+	if calmo:
+		alivio = 15.0
+		return
 	var a2 := PI + randf_range(-1.0, 1.0)
 	var p2: Vector3 = j.global_position + fr.rotated(Vector3.UP, a2) * randf_range(38.0, 52.0)
 	if _livre(p2):
@@ -127,6 +134,9 @@ func emboscada(d: float) -> void:
 	var j = Jogo.jogador
 	var c := _cr()
 	if c.estado in [Criatura.E.CACA, Criatura.E.ATAQUE, Criatura.E.TORRE]:
+		return
+	if Jogo.etapa < 4 and not Teste.a.has("morte"):
+		Jogo.anomalias.fazer("corre")
 		return
 	var fr: Vector3 = -j.cam.global_transform.basis.z
 	fr.y = 0
@@ -169,6 +179,16 @@ func respondeu() -> void:
 	Jogo.falar("você", ["Tem alguém aí?!", "Ei! Aqui! Socorro!", "Quem tá aí?!"][randi() % 3], 2.2)
 	j.ruido = 70.0
 	if not ligado:
+		return
+	if Jogo.etapa < 4:
+		# ainda longe: so responde de volta
+		chamando = 0.0
+		await get_tree().create_timer(3.0, false).timeout
+		if Jogo.jogador == null or j.morto: return
+		var dl: Vector3 = -j.cam.global_transform.basis.z * 70.0
+		Som.em("v_alex1", j.global_position + dl, 4.0, 180, 0.9, "Eco", 18.0)
+		Jogo.falar("muito longe", "Alex...", 3.0)
+		j.medo = maxf(j.medo, 0.5)
 		return
 	if chamando > 0.0 or (c.visible and c.dist_jog() < 60.0) or Jogo.chamados >= 2:
 		var era := chamando > 0.0

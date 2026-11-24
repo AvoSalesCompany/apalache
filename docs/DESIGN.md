@@ -22,11 +22,22 @@ antiga, e a frase "não, você não ouviu" veio de vídeos. O jogo não afirma q
 - **Som como ferramenta e risco**: correr, pisar em galho ou gritar atrai. Pedras distraem.
 - **Recursos curtos**: curativos, pedras, calor, fôlego.
 - **Interface mínima**: barras só aparecem quando importam.
+- **Construir antes de assustar**: o susto precisa de preparação e de descanso depois
+  ([Game Developer](https://www.gamedeveloper.com/design/the-time-and-place-for-jump-scares-according-to-horror-devs),
+  [Game Wisdom](https://game-wisdom.com/critical/jumpscare-horror-game-design)). Em `anomalias.gd` há intervalo mínimo entre sustos fortes e nunca se repete o mesmo em seguida.
+- **Esconder é melhor que mostrar**: neblina e quarto escuro com lanterna ([Epic](https://store.epicgames.com/news/why-horror-games-are-so-scary)).
+- **O que streamers jogam**: terror que rende reação e história compartilhável
+  ([Streams Charts](https://streamscharts.com/news/twitch-horror-games-halloween-2025), [Gamesight](https://blog.gamesight.io/horror-gaming-creator-ecosystem/)).
+
+## Os dezoito
+
+Dezenove a bordo, falta um: você. Os outros estão na mata, parados, altos demais, boca aberta demais.
+Não atacam. Somem quando encarados. A voz que chama sai deles.
 
 ## Roteiro
 
 1. **Voo 609** — a luz na asa, a pane, a queda.
-2. **Destroços** — jaqueta, curativos, bússola e o desenho da criança.
+2. **Destroços** — uma lanterna acesa no chão ilumina alguém acenando. Jaqueta, curativos, bússola e o desenho da criança.
 3. **Riacho** — "água sempre acaba em gente". A tábua com as regras e a primeira aparição.
 4. **Cabana** — caderno do guarda, fogão, chave. Três batidas na porta.
 5. **Cemitério** — todas as lápides com a mesma data. Uma cruz com o seu nome.

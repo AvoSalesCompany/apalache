@@ -14,6 +14,10 @@ func _enter_tree() -> void:
 		if kv.size() == 2:
 			a[kv[0]] = kv[1].uri_decode()
 	ativo = not a.is_empty()
+	if ativo:
+		# teste nunca rouba o foco nem aparece por cima do que a pessoa faz
+		get_window().unfocusable = true
+		get_window().position = Vector2i(-6000, -6000)
 
 
 func num(k: String, d: float) -> float:

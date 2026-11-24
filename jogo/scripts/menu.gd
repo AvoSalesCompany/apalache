@@ -130,7 +130,7 @@ func principal() -> void:
 	_botao("Novo jogo", func(): novo.emit())
 	_botao("Opções", func(): opcoes("menu"))
 	_botao("Sair", func(): get_tree().quit())
-	_rodape.text = "Use fones de ouvido.   v0.1"
+	_rodape.text = "Use fones de ouvido.   v0.2"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -144,7 +144,7 @@ func pausa() -> void:
 	_botao("Voltar ao jogo", func(): retomar.emit())
 	_botao("Opções", func(): opcoes("pausa"))
 	_botao("Menu principal", func(): voltar_menu.emit())
-	_rodape.text = "WASD andar   ·   Shift correr   ·   Ctrl agachar   ·   E usar   ·   Q gritar por socorro   ·   C bússola   ·   F pedra   ·   H curativo   ·   Tab caderno"
+	_rodape.text = "WASD andar   ·   Shift correr   ·   Ctrl agachar   ·   E usar   ·   Q gritar por socorro   ·   F lanterna   ·   C bússola   ·   Clique arremessar   ·   H curativo   ·   Tab caderno"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 

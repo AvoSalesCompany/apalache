@@ -230,5 +230,6 @@ $nl = "`n"
 [Folhagem]::Placa("$saida\placa_torre.png", 512, 256, "TORRE DE INC$([char]0xCA)NDIO${nl}CHAVE COM O GUARDA", 'Arial', 38, 226, 214, 180, 66, 46, 30, 2.0)
 [Folhagem]::Placa("$saida\placa_regras.png", 512, 640, "N$([char]0xC3)O GRITE.${nl}N$([char]0xC3)O RESPONDA.${nl}N$([char]0xC3)O SIGA AS LUZES.${nl}SE O MATO CALAR,${nl}CALE TAMB$([char]0xC9)M.", 'Georgia', 46, 24, 14, 10, 112, 86, 60, 2.0)
 [Folhagem]::Placa("$saida\placa_cinto.png", 256, 128, 'APERTE OS CINTOS', 'Arial', 25, 255, 214, 120, 26, 18, 10, 0)
+[Folhagem]::Placa("$saida\placa_saida.png", 256, 90, "SA$([char]0xCD)DA", 'Arial', 58, 255, 250, 240, 120, 12, 8, 0.2)
 [Folhagem]::Placa("$saida\placa_ponte.png", 512, 256, "PONTE ESTREITA${nl}ROD. 19  -  300 m", 'Arial', 52, 20, 18, 14, 206, 160, 40, 2.2)
 Get-ChildItem $saida -Filter *.png | Select-Object Name,Length

@@ -37,6 +37,7 @@ var criatura = null
 var hud = null
 var historia = null
 var diretor = null
+var anomalias = null
 
 
 func _ready() -> void:
@@ -49,7 +50,7 @@ func _teclas() -> void:
 	var t := {
 		"frente": [KEY_W, KEY_UP], "tras": [KEY_S, KEY_DOWN], "esquerda": [KEY_A, KEY_LEFT], "direita": [KEY_D, KEY_RIGHT],
 		"correr": [KEY_SHIFT], "agachar": [KEY_CTRL], "pular": [KEY_SPACE], "usar": [KEY_E], "gritar": [KEY_Q],
-		"bussola": [KEY_C], "diario": [KEY_TAB], "curar": [KEY_H], "pausa": [KEY_ESCAPE], "arremessar": [KEY_F],
+		"bussola": [KEY_C], "diario": [KEY_TAB], "curar": [KEY_H], "pausa": [KEY_ESCAPE], "lanterna": [KEY_F],
 	}
 	for a in t:
 		if not InputMap.has_action(a):
@@ -163,6 +164,7 @@ func salvar() -> void:
 		giro_salvo = jogador.rotation.y
 		vida_salva = maxf(45.0, jogador.vida)
 		frio_salvo = minf(60.0, jogador.frio)
+		flags["bateria"] = jogador.lanterna.bateria
 	var d := {"etapa": etapa, "itens": itens, "notas": notas, "objetivo": objetivo, "flags": flags, "tempo": tempo, "mortes": mortes, "chamados": chamados,
 		"px": pos_salva.x, "py": pos_salva.y, "pz": pos_salva.z, "giro": giro_salvo, "vida": vida_salva, "frio": frio_salvo}
 	var f := FileAccess.open(SAVE, FileAccess.WRITE)

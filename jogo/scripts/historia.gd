@@ -59,11 +59,14 @@ func comecar(novo: bool) -> void:
 	j.so_olhar = false
 	Jogo.diretor.reset()
 	Jogo.diretor.ligado = true
+	Jogo.anomalias.reset()
+	Jogo.anomalias.ligado = true
 
 
 func _restaura() -> void:
 	var loc := fl.locais
-	for k in ["jaqueta", "kit", "bussola", "chave", "curativo2"]:
+	_j().lanterna.bateria = float(Jogo.flags.get("bateria", 100.0))
+	for k in ["lanterna", "jaqueta", "kit", "bussola", "chave", "curativo2", "pilha1", "pilha2", "pilha3"]:
 		if Jogo.flags.get("pegou_" + k, false):
 			loc.it[k].ativo = false
 			loc.nos[k].visible = false
@@ -80,6 +83,13 @@ func _restaura() -> void:
 func _acordar() -> void:
 	var j := _j()
 	var h: Hud = Jogo.hud
+	# no fim do facho da lanterna caida, alguem em pe
+	var ln: Node3D = fl.locais.nos["lanterna"]
+	var vp: Vector3 = ln.global_position - ln.global_transform.basis.z * 15.0
+	var vi := Vigia.new().montar(true)
+	fl.add_child(vi)
+	vi.set_meta("cena", true)
+	vi.por(vp, j.global_position)
 	h.escurecer(1.0, 0.0)
 	h.tonto = 1.0
 	Som.abafado = 1.0
@@ -108,9 +118,33 @@ func _acordar() -> void:
 	await esperar(2.0)
 	j.so_olhar = false
 	Jogo.etapa = 1
-	Jogo.definir_objetivo("Reviste os destroços  (0/3)")
+	Jogo.definir_objetivo("Pegue a lanterna caída")
 	Jogo.aviso.emit("WASD andar  ·  Mouse olhar  ·  E usar  ·  Shift correr  ·  Ctrl agachar")
+	_some_vigia(vi)
 	Jogo.salvar()
+
+
+## a figura some quando voce olha ou quando a lanterna falha
+func _some_vigia(vi: Vigia) -> void:
+	var t := 0.0
+	while is_instance_valid(vi) and t < 25.0:
+		await get_tree().process_frame
+		if not is_inside_tree() or not is_instance_valid(vi): return
+		t += get_process_delta_time()
+		if vi.na_vista(0.9): vi.visto += get_process_delta_time()
+		if vi.visto > 1.1 or vi.global_position.distance_to(_j().global_position) < 11.0: break
+	var lz: SpotLight3D = fl.locais.nos["lanterna_luz"]
+	for k in 4:
+		lz.visible = false
+		await esperar(0.06 + randf() * 0.08)
+		lz.visible = true
+		await esperar(0.05 + randf() * 0.10)
+	lz.visible = false
+	await esperar(0.30)
+	if is_instance_valid(vi): vi.queue_free()
+	lz.visible = fl.locais.nos["lanterna"].visible
+	if _j().medo < 0.5: _j().medo = 0.5
+	Som.toca("sub", -10)
 
 
 # =============================================================== itens e notas
@@ -121,6 +155,17 @@ func pegar(id: String) -> void:
 	Jogo.flags["pegou_" + id] = true
 	Som.toca("pegar", -4)
 	match id:
+		"lanterna":
+			Jogo.dar("lanterna")
+			_j().lanterna.bateria = 100.0
+			_j().lanterna.ligada = true
+			Som.toca("radio_clique", -8, 1.6)
+			Jogo.aviso.emit("Lanterna  —  [F] liga e desliga. A luz ajuda, mas também mostra você")
+			if Jogo.etapa == 1:
+				Jogo.definir_objetivo("Reviste os destroços  (0/3)")
+		"pilha1", "pilha2", "pilha3":
+			Jogo.dar("pilha")
+			Jogo.aviso.emit("Pilhas ×1")
 		"jaqueta":
 			Jogo.dar("jaqueta")
 			Jogo.aviso.emit("Jaqueta de lona — você perde calor mais devagar")
@@ -216,10 +261,43 @@ func _batidas() -> void:
 	await esperar(2.5)
 	Jogo.diretor.chamando = 0.0
 	Jogo.diretor.silencio_alvo = 0.0
+	_rosto_na_janela()
+	Jogo.diretor.alivio = 55.0
 	Jogo.etapa = maxi(Jogo.etapa, 4)
 	Jogo.definir_objetivo("Siga a trilha para leste até a Torre 4")
 	for f in fl.locais.fogos: f.visible = false
 	Jogo.salvar()
+
+
+## um rosto colado na janela, so ate voce notar
+func _rosto_na_janela() -> void:
+	var j := _j()
+	var cab: Node3D = fl.locais.nos["cabana"]
+	var v := Vigia.new().montar(false)
+	v.set_meta("cena", true)
+	fl.add_child(v)
+	var fora := cab.to_global(Vector3(3.62, -0.62, 0.06))
+	v.global_position = fora
+	v.modo = "costas"
+	var d := cab.to_global(Vector3(0, 0, 0)) - fora
+	v.rotation.y = atan2(-d.x, -d.z)
+	var t := 0.0
+	while t < 40.0 and is_instance_valid(v):
+		await get_tree().process_frame
+		if not is_inside_tree() or not is_instance_valid(v): return
+		if Jogo.hud.lendo: continue
+		t += get_process_delta_time()
+		if not j.abrigado: break
+		var c := v.global_position + Vector3.UP * 2.0
+		var dd: Vector3 = (c - j.cam.global_position).normalized()
+		if (-j.cam.global_transform.basis.z).dot(dd) > 0.84:
+			v.visto += get_process_delta_time()
+		if v.visto > 0.30:
+			Jogo.anomalias.susto(0.85)
+			await esperar(0.5)
+			Jogo.anomalias._piscar(j, 0.6)
+			break
+	if is_instance_valid(v): v.queue_free()
 
 
 func acender_fogao() -> void:
@@ -292,6 +370,8 @@ func radio() -> void:
 	j.so_olhar = true
 	var pr: Vector3 = fl.locais.it["radio"].global_position
 	Som.toca("radio_clique", -2)
+	Jogo.anomalias.limpar()
+	Jogo.anomalias.ligado = false
 	Jogo.diretor.alivio = 200.0
 	Jogo.diretor.ligado = false
 	Jogo.criatura.esconder()
@@ -366,7 +446,7 @@ func _subida() -> void:
 			else:
 				c.vel = 0.0
 				c.rumo += sin(tempo * 1.3) * dt * 0.9
-			c.rotation.y = lerp_angle(c.rotation.y, c.rumo, dt * 2.5)
+			c.rotation.y = lerp_angle(c.rotation.y, c.rumo, minf(1.0, dt * 2.5))
 		if fase == 0 and tempo > 3.5:
 			fase = 1
 			Som.em("v_alex2", c.global_position + Vector3.UP * 2.2, 4.0, 30, 0.9, "Voz", 4.0)
@@ -391,8 +471,33 @@ func _subida() -> void:
 	Jogo.etapa = 6
 	Jogo.definir_objetivo("Desça a torre e siga a estrada de serviço para o sul, até a ponte")
 	Jogo.diretor.ligado = true
+	Jogo.anomalias.ligado = true
+	Jogo.anomalias.t = 30.0
 	Jogo.diretor.alivio = 30.0
+	_roda_da_torre()
 	Jogo.salvar()
+
+
+## embaixo da torre, varios deles, em roda, olhando para cima
+func _roda_da_torre() -> void:
+	var t: Node3D = fl.locais.nos["torre"]
+	for i in 9:
+		var a := TAU * i / 9.0 + 0.2
+		var p := t.global_position + Vector3(cos(a), 0, sin(a)) * randf_range(11.0, 14.0)
+		var v := Vigia.new().montar(i % 4 == 0)
+		fl.add_child(v)
+		v.por(p, t.global_position)
+		v.set_meta("cena", true)
+		Jogo.anomalias.ativos.append(v)
+	# somem quando voce chega ao chao
+	while is_inside_tree() and Jogo.etapa == 6 and not _j().morto:
+		await get_tree().create_timer(0.3, false).timeout
+		if not is_inside_tree(): return
+		if _j().global_position.y < t.global_position.y + 4.2:
+			Jogo.anomalias._piscar(_j(), 1.1)
+			Som.toca("stinger2", -8)
+			break
+	Jogo.anomalias.limpar()
 
 
 # =============================================================== morte
@@ -428,6 +533,9 @@ func morrer(causa: String) -> void:
 	j.travado = true
 	Jogo.mortes += 1
 	Jogo.diretor.ligado = false
+	Jogo.anomalias.limpar()
+	Jogo.anomalias.ligado = false
+	j.lanterna.apagao = 0.0
 	if causa == "pego":
 		c.muda(Criatura.E.ATAQUE)
 		c.em_pe = 1.0
@@ -605,6 +713,16 @@ func _na_rodovia() -> void:
 		Som.em("cr_grito2", c.global_position, 8.0, 200, 0.8, "Eco", 20.0)
 	Jogo.diretor.ligado = false
 	Jogo.diretor.silencio = 1.0
+	Jogo.anomalias.ligado = false
+	Jogo.anomalias.limpar()
+	# os dezoito saem da mata e param na beira do asfalto
+	for i in 18:
+		var x := 236.0 + i * 2.6 + randf_range(-0.6, 0.6)
+		var z: float = fl.locais._z_rod(x) - 8.6 - randf_range(0.0, 2.5)
+		var v := Vigia.new().montar(i % 6 == 2)
+		fl.add_child(v)
+		v.por(Vector3(x, 0, z), _j().global_position)
+		v.set_meta("cena", true)
 	Jogo.definir_objetivo("Asfalto. Siga para leste, até as luzes")
 	Jogo.falar("", "Ele parou onde o asfalto começa.", 4.0)
 	Jogo.salvar()

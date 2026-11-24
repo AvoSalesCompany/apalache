@@ -40,14 +40,19 @@ var _t_luz := 0.0
 var _t_cor := 0.0
 var _queda := 0.0
 var _mergulho := 0.0
+var _moita_t := 0.0
 var _cansado := false
 var _ar_t := 0.0
 var _bus: Node3D
 var _agulha: Node3D
 var _bus_v := 0.0
 var _roll := 0.0
+var lanterna: Lanterna
+var carrega: ObjetoFisico = null
+var obj_alvo: ObjetoFisico = null
 var olhar_forcado := Vector3.INF
 var robo := {}            # comandos do teste automatico
+var robotizado := false   # no teste, teclado e mouse reais sao ignorados
 
 
 func _ready() -> void:
@@ -66,6 +71,8 @@ func _ready() -> void:
 	cam.near = 0.06
 	cam.far = 1400
 	add_child(cam)
+	lanterna = Lanterna.new()
+	add_child(lanterna)
 	_faz_bussola()
 
 
@@ -123,17 +130,19 @@ func tremer(f: float) -> void:
 func _ac(a: String) -> bool:
 	if robo.has(a):
 		return robo[a]
-	return Input.is_action_pressed(a)
+	return false if robotizado else Input.is_action_pressed(a)
 
 
 func _eixo() -> Vector2:
 	if robo.has("eixo"):
 		return robo.eixo
+	if robotizado:
+		return Vector2.ZERO
 	return Input.get_vector("esquerda", "direita", "frente", "tras")
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if travado or morto:
+	if travado or morto or robotizado:
 		return
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var s := 0.0021 * Jogo.sens * (cam.fov / 72.0)
@@ -141,7 +150,9 @@ func _unhandled_input(e: InputEvent) -> void:
 		incl = clampf(incl - e.relative.y * s, -1.5, 1.5)
 	if so_olhar:
 		return
-	if e.is_action_pressed("gritar"):
+	if e.is_action_pressed("lanterna"):
+		lanterna.alternar()
+	elif e.is_action_pressed("gritar"):
 		gritar()
 	elif e.is_action_pressed("arremessar"):
 		arremessar()
@@ -166,6 +177,14 @@ func curar() -> void:
 
 
 func arremessar() -> void:
+	if carrega:
+		var c := carrega
+		carrega = null
+		c.gravity_scale = 1.0
+		c.linear_velocity = -cam.global_transform.basis.z * clampf(11.0 - c.mass * 0.5, 4.0, 11.0) + Vector3.UP * 1.5
+		c.angular_velocity = Vector3(randf_range(-4, 4), randf_range(-4, 4), randf_range(-4, 4))
+		Som.toca("arbusto", -16, 1.4)
+		return
 	if not Jogo.gastar("pedra"):
 		return
 	Som.toca("arbusto", -14, 1.4)
@@ -197,6 +216,9 @@ func _physics_process(dt: float) -> void:
 	var chao := is_on_floor()
 	var alvo_v := d * v
 	var ac := 12.0 if chao else 2.0
+	# mato fechado segura o passo
+	if _moita_t > 0.25 and not agachado:
+		alvo_v *= lerpf(1.0, 0.55, _moita_t)
 	velocity.x = move_toward(velocity.x, alvo_v.x, ac * dt * maxf(1.0, v * 0.5))
 	velocity.z = move_toward(velocity.z, alvo_v.z, ac * dt * maxf(1.0, v * 0.5))
 	if chao:
@@ -215,6 +237,21 @@ func _physics_process(dt: float) -> void:
 		velocity.y -= 13.0 * dt
 		_queda = maxf(_queda, -velocity.y)
 	move_and_slide()
+	for k in get_slide_collision_count():
+		var col := get_slide_collision(k)
+		var rb = col.get_collider()
+		if rb is RigidBody3D and col.get_normal().y < 0.6:
+			var emp: Vector3 = -col.get_normal()
+			emp.y = 0.0
+			emp = emp.normalized()
+			# leve acompanha o passo; pesado arrasta devagar
+			var quer := v * clampf(7.0 / rb.mass, 0.22, 0.95)
+			var ja: float = rb.linear_velocity.dot(emp)
+			if ja < quer:
+				rb.sleeping = false
+				rb.apply_central_impulse((emp + Vector3.UP * 0.10) * (quer - ja) * rb.mass * 0.8)
+				rb.apply_torque_impulse(Vector3.UP * randf_range(-0.05, 0.05) * rb.mass)
+	_carregar(dt)
 	# rede de seguranca: nunca atravessar o terreno
 	var ty := Mundo.altura(global_position.x, global_position.z)
 	if global_position.y < ty - 1.2:
@@ -226,6 +263,24 @@ func _physics_process(dt: float) -> void:
 	_corpo(dt, corre, chao)
 	_sentidos(dt)
 	_procura_alvo(dt)
+
+
+func _carregar(dt: float) -> void:
+	if carrega == null:
+		return
+	if not is_instance_valid(carrega) or morto or travado:
+		if is_instance_valid(carrega): carrega.gravity_scale = 1.0
+		carrega = null
+		return
+	var alvo_p := cam.global_position - cam.global_transform.basis.z * 1.25 - cam.global_transform.basis.y * 0.18
+	var d := alvo_p - carrega.global_position
+	if d.length() > 2.4:
+		carrega.gravity_scale = 1.0
+		carrega = null
+		return
+	carrega.linear_velocity = d * 11.0
+	carrega.angular_velocity *= 0.86
+	carrega.sleeping = false
 
 
 func _corpo(dt: float, corre: bool, chao: bool) -> void:
@@ -250,7 +305,7 @@ func _corpo(dt: float, corre: bool, chao: bool) -> void:
 	var dr := Mundo.dist(Mundo.RIO, global_position.x, global_position.z) if absf(global_position.y - Mundo.altura(global_position.x, global_position.z)) < 0.6 else 99.0
 	na_agua = dr < 3.2 and _nivel_rio() > global_position.y + 0.08
 	# passos
-	_bob_amp = lerpf(_bob_amp, clampf(vh / V_CORRE, 0.0, 1.0) if chao else 0.0, dt * 8.0)
+	_bob_amp = lerpf(_bob_amp, clampf(vh / V_CORRE, 0.0, 1.0) if chao else 0.0, minf(1.0, dt * 8.0))
 	_bob += vh * dt * (1.75 if not agachado else 2.1)
 	_passo += vh * dt
 	var comp := 1.05 if agachado else (1.95 if corre else 1.45)
@@ -264,7 +319,7 @@ func _corpo(dt: float, corre: bool, chao: bool) -> void:
 		if na_agua: r += 6.0
 		if _sup() == "p_madeira" or _sup() == "p_metal": r *= 1.15
 	if _cansado: r = maxf(r, 8.0)
-	ruido = lerpf(ruido, r, dt * 5.0)
+	ruido = lerpf(ruido, r, minf(1.0, dt * 5.0))
 
 
 func _nivel_rio() -> float:
@@ -302,10 +357,14 @@ func _sentidos(dt: float) -> void:
 		_t_cor = Mundo.luar(global_position + Vector3.UP * 1.2)
 		if abrigado: _t_cor *= 0.3
 		var mt := Mundo.moita(global_position)
+		_moita_t = mt
+		if mt > 0.3 and Vector2(velocity.x, velocity.z).length() > 0.8 and randf() < 0.35:
+			Som.toca("arbusto", -18, randf_range(0.9, 1.2))
+			ruido = maxf(ruido, 13.0 if not agachado else 5.0)
 		_mergulho = mt if agachado else mt * 0.25
 		if esconderijo and agachado: _mergulho = 1.0
-	luz = lerpf(luz, _t_cor, dt * 2.0)
-	escondido = lerpf(escondido, _mergulho, dt * 3.0)
+	luz = lerpf(luz, _t_cor, minf(1.0, dt * 2.0))
+	escondido = lerpf(escondido, _mergulho, minf(1.0, dt * 3.0))
 	# medo
 	var m := 0.0
 	var cr = Jogo.criatura
@@ -348,8 +407,29 @@ func _procura_alvo(dt: float) -> void:
 				alvo = i
 	if alvo != antes:
 		_segura = 0.0
+	obj_alvo = null
+	if carrega:
+		if Input.is_action_just_pressed("usar") and not robotizado:
+			carrega.gravity_scale = 1.0
+			carrega = null
+		return
+	if alvo == null:
+		var q := PhysicsRayQueryParameters3D.create(cam.global_position, cam.global_position + fr * 2.3)
+		q.exclude = [get_rid()]
+		var h := get_world_3d().direct_space_state.intersect_ray(q)
+		if not h.is_empty() and h.collider is ObjetoFisico:
+			obj_alvo = h.collider
+			if Input.is_action_just_pressed("usar") and not robotizado:
+				if obj_alvo.pesado:
+					Jogo.aviso.emit("Pesado demais para carregar")
+					obj_alvo.apply_impulse(fr * obj_alvo.mass * 0.8, h.position - obj_alvo.global_position)
+				else:
+					carrega = obj_alvo
+					carrega.gravity_scale = 0.0
+					Som.toca("pegar", -10)
+			return
 	if alvo:
-		var usa: bool = robo.get("usar", Input.is_action_pressed("usar"))
+		var usa: bool = robo.get("usar", false if robotizado else Input.is_action_pressed("usar"))
 		if alvo.segurar > 0.0:
 			if usa:
 				_segura += dt
@@ -359,7 +439,7 @@ func _procura_alvo(dt: float) -> void:
 					alvo.usar()
 			else:
 				_segura = 0.0
-		elif Input.is_action_just_pressed("usar") or robo.get("usar", false):
+		elif (Input.is_action_just_pressed("usar") and not robotizado) or robo.get("usar", false):
 			robo.erase("usar")
 			alvo.usar()
 	elif Jogo.tem("pedra") < 5 and Mundo.dist(Mundo.RIO, global_position.x, global_position.z) < 5.0 and incl < -0.35:
@@ -370,6 +450,10 @@ func _procura_alvo(dt: float) -> void:
 
 
 func dica() -> String:
+	if carrega:
+		return "[E] Soltar    [clique] Arremessar"
+	if obj_alvo and not alvo:
+		return "[E] Empurrar %s" % obj_alvo.nome if obj_alvo.pesado else "[E] Pegar %s" % obj_alvo.nome
 	if alvo:
 		return ("[E] %s" if alvo.segurar <= 0.0 else "[segure E] %s") % alvo.texto
 	if not travado and Jogo.tem("pedra") < 5 and incl < -0.35 and Mundo.dist(Mundo.RIO, global_position.x, global_position.z) < 5.0:
@@ -386,7 +470,7 @@ func _process(dt: float) -> void:
 		return
 	var f := Engine.get_physics_interpolation_fraction()
 	var p := _ant.lerp(_atu, f)
-	_olho = lerpf(_olho, 0.86 if agachado else 1.64, dt * 9.0)
+	_olho = lerpf(_olho, 0.86 if agachado else 1.64, minf(1.0, dt * 9.0))
 	var t := Time.get_ticks_msec() / 1000.0
 	var by := sin(_bob * 2.0) * 0.040 * _bob_amp
 	var bx := cos(_bob) * 0.030 * _bob_amp
@@ -398,7 +482,7 @@ func _process(dt: float) -> void:
 	var b := Basis(Vector3.UP, rotation.y)
 	cam.global_position = p + Vector3.UP * (_olho + by + resp) + b * Vector3(bx, 0, 0) + b * ch * 0.14
 	var lat := b.inverse() * Vector3(velocity.x, 0, velocity.z)
-	_roll = lerpf(_roll, -lat.x * 0.006, dt * 5.0)
+	_roll = lerpf(_roll, -lat.x * 0.006, minf(1.0, dt * 5.0))
 	if olhar_forcado != Vector3.INF:
 		var d := (olhar_forcado - cam.global_position).normalized()
 		var ry := atan2(-d.x, -d.z)
@@ -408,8 +492,9 @@ func _process(dt: float) -> void:
 	var alvo_f := 72.0
 	if _ac("foco") and not travado: alvo_f = 46.0
 	elif Vector2(velocity.x, velocity.z).length() > 3.6: alvo_f = 78.0
-	_fov = lerpf(_fov, alvo_f - medo * 4.0, dt * 6.0)
+	_fov = lerpf(_fov, alvo_f - medo * 4.0, minf(1.0, dt * 6.0))
 	cam.fov = _fov
+	lanterna.atualiza(dt, cam, _bob * _bob_amp)
 	# bussola
 	var quer := _ac("bussola") and Jogo.tem("bussola") > 0 and not travado
 	_bus_v = move_toward(_bus_v, 1.0 if quer else 0.0, dt * 4.0)

@@ -161,6 +161,19 @@ func anexar(o: Malha, tr: Transform3D) -> void:
 		idx.push_back(i + b)
 
 
+## recalcula normais suaves (vertices compartilhados) a partir do indice 'ini' de vertice
+func suaviza(vi: int, ii: int) -> void:
+	for i in range(vi, v.size()):
+		n[i] = Vector3.ZERO
+	for k in range(ii, idx.size(), 3):
+		var a := v[idx[k]]
+		var f := (v[idx[k + 2]] - a).cross(v[idx[k + 1]] - a)
+		for q in 3:
+			n[idx[k + q]] += f
+	for i in range(vi, v.size()):
+		n[i] = n[i].normalized()
+
+
 func vento(altura: float, expo: float = 1.7, forca: float = 1.0) -> void:
 	for i in v.size():
 		var k := c[i]

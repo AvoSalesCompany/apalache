@@ -11,7 +11,18 @@ func cap(a: Vector3, b: Vector3, ra: float, rb: float, osso: int = 0, cor: Color
 	pr.append([a, b, ra, rb, osso, cor])
 
 
+## caixa arredondada: centro, metade do tamanho, raio da borda, rotacao em X
+func caixa(c: Vector3, metade: Vector3, r: float, rotx: float = 0.0, osso: int = 0, cor: Color = Color.WHITE) -> void:
+	pr.append([c, metade - Vector3.ONE * r, r, rotx, osso, cor, true])
+
+
 func d1(p: Vector3, q: Array) -> float:
+	if q.size() > 6:
+		var lp: Vector3 = p - q[0]
+		if q[3] != 0.0:
+			lp = lp.rotated(Vector3.RIGHT, -q[3])
+		var e: Vector3 = lp.abs() - q[1]
+		return Vector3(maxf(e.x, 0), maxf(e.y, 0), maxf(e.z, 0)).length() + minf(maxf(e.x, maxf(e.y, e.z)), 0.0) - q[2]
 	var a: Vector3 = q[0]
 	var ba: Vector3 = q[1] - a
 	var l := ba.length_squared()

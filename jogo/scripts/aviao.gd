@@ -4,7 +4,14 @@ extends Node3D
 
 signal caiu(protegido: bool)
 
+const ZI := -3.2          # onde a cabine comeca
+const LUZ := 0.55
+
 var cam: Camera3D
+var serv := {}
+var disco: MeshInstance3D
+var leitura: Array = []
+var calha: StandardMaterial3D
 var casco: Node3D            # balanca com a turbulencia (cabine + jogador + asa)
 var env: Environment
 var lua: DirectionalLight3D
@@ -60,7 +67,7 @@ func construir() -> void:
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.35, 0.42, 0.58)
-	env.ambient_light_energy = 0.10
+	env.ambient_light_energy = 0.07
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_exposure = 1.2
 	env.glow_enabled = true
@@ -73,13 +80,13 @@ func construir() -> void:
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.10, 0.13, 0.19)
 	env.fog_light_energy = 0.35
-	env.fog_density = 0.00075
+	env.fog_density = 0.00052
 	env.fog_sky_affect = 0.0
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.028
+	env.volumetric_fog_density = 0.042
 	env.volumetric_fog_albedo = Color(0.8, 0.85, 0.95)
 	env.volumetric_fog_anisotropy = 0.5
-	env.volumetric_fog_length = 14.0
+	env.volumetric_fog_length = 9.0
 	env.volumetric_fog_detail_spread = 1.2
 	env.volumetric_fog_ambient_inject = 0.0
 	env.volumetric_fog_sky_affect = 0.0
@@ -90,7 +97,8 @@ func construir() -> void:
 	lua.light_angular_distance = 0.4
 	lua.shadow_enabled = true
 	lua.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	lua.directional_shadow_max_distance = 26.0
+	lua.directional_shadow_max_distance = 7.5
+	lua.shadow_blur = 2.2
 	lua.directional_shadow_split_1 = 0.4
 	lua.shadow_bias = 0.02
 	lua.shadow_normal_bias = 0.8
@@ -112,105 +120,162 @@ func construir() -> void:
 
 	casco = Node3D.new()
 	add_child(casco)
-	Aeronave.casco(casco, 15, -6.4)
-	Aeronave.piso(casco, 12.0, -6.4)
-	Aeronave.bagageiro(casco, 12.0, -6.4)
-	Aeronave.fileiras(casco, 13, -5.4)
+	Aeronave.casco(casco, 8, ZI, Callable(), 0.0, true)
+	Aeronave.piso(casco, 6.4, ZI)
+	Aeronave.fileiras(casco, 7, ZI, [[6, 0], [6, 1]])
+	serv = Aeronave.servico(casco, 7, ZI)
+	Aeronave.cockpit(casco, ZI)
 	asa = Aeronave.asa(casco, 1.0)
+	disco = Aeronave.disco_helice(casco, asa.helice.position + Vector3(0, 0, -0.05))
 	var a2 := Node3D.new()
 	casco.add_child(a2)
 	Aeronave.asa(a2, -1.0)
-	# parede da frente e de tras
+	# divisoria da frente com vao para o cockpit, e parede de tras
+	var fdiv := Aeronave.m_forro(Color(0.40, 0.375, 0.33), 0.45)
 	var pr := Malha.new()
-	pr.cx(Vector3(-0.85, 0.1, -6.4), Vector3(1.3, 2.4, 0.08))
-	pr.cx(Vector3(0.85, 0.1, -6.4), Vector3(1.3, 2.4, 0.08))
-	pr.cx(Vector3(0, 1.15, -6.4), Vector3(0.6, 0.6, 0.08))
-	pr.cx(Vector3(0, 0, 5.6), Vector3(2.9, 2.9, 0.08))
-	pr.no(Mat.liso(Color(0.42, 0.40, 0.36), 0.7), casco)
+	pr.cx(Vector3(-0.83, 0.05, ZI), Vector3(0.72, 1.9, 0.05))
+	pr.cx(Vector3(0.62, 0.05, ZI), Vector3(1.14, 1.9, 0.05))
+	pr.cx(Vector3(-0.22, 1.02, ZI), Vector3(0.60, 0.34, 0.05))
+	pr.cx(Vector3(0, 0.05, ZI + 6.4), Vector3(2.3, 2.3, 0.05))
+	pr.no(fdiv, casco)
+	var fr := Malha.new()
+	for x in [-0.475, 0.045]:
+		fr.cx(Vector3(x, 0.05, ZI + 0.02), Vector3(0.05, 1.62, 0.07))
+	fr.cx(Vector3(-0.215, 0.86, ZI + 0.02), Vector3(0.57, 0.05, 0.07))
+	fr.no(Mat.liso(Color(0.25, 0.25, 0.26), 0.4, 0.6), casco)
 	var ct := Malha.new()
-	for i in 6:
-		ct.tubo([Vector3(-0.22 + i * 0.09, 0.86, -6.33), Vector3(-0.23 + i * 0.092, -0.76, -6.33 + 0.02 * (i % 2))], [0.05, 0.06], 8)
-	ct.no(Mat.pbr("fabric_pattern_07", 1.0, Color(0.16, 0.10, 0.10)), casco)
-	# passageiros
-	var cores := [[Color(0.24, 0.10, 0.09), Color(0.06, 0.06, 0.08), Color(0.05, 0.035, 0.02)], [Color(0.45, 0.43, 0.38), Color(0.10, 0.09, 0.07), Color(0.22, 0.20, 0.18)], [Color(0.10, 0.16, 0.26), Color(0.05, 0.06, 0.10), Color(0.10, 0.05, 0.02)], [Color(0.14, 0.20, 0.13), Color(0.12, 0.10, 0.08), Color(0.02, 0.016, 0.012)]]
-	var peles := [Color(0.60, 0.42, 0.34), Color(0.34, 0.21, 0.15), Color(0.66, 0.49, 0.40), Color(0.45, 0.30, 0.22)]
+	for i in 5:
+		var x := -0.45 + i * 0.045
+		ct.tubo([Vector3(x, 0.83, ZI + 0.05), Vector3(x - 0.004, 0.0, ZI + 0.055 + 0.018 * (i % 2)), Vector3(x, -0.70, ZI + 0.05 + 0.02 * (i % 2))], [0.026, 0.030, 0.034], 8, 1.0, 1.0)
+	ct.no(Aeronave.m_forro(Color(0.13, 0.05, 0.05), 0.2, 0.0, 1.0), casco)
+	# placas de saida e proibido fumar
+	var ex := MeshInstance3D.new()
+	var exm := QuadMesh.new()
+	exm.size = Vector2(0.26, 0.09)
+	ex.mesh = exm
+	ex.position = Vector3(-0.215, 0.95, ZI + 0.04)
+	ex.material_override = Mat.placa("placa_saida.png", 1.2)
+	casco.add_child(ex)
+	# cockpit: painel aceso e dois pilotos
+	var pnl := Malha.new()
+	pnl.cx(Vector3(0, -0.12, ZI - 1.18), Vector3(1.7, 0.42, 0.06), Vector3(-0.25, 0, 0))
+	pnl.no(Mat.liso(Color(0.03, 0.03, 0.035), 0.6), casco)
+	var rngp := RandomNumberGenerator.new()
+	rngp.seed = 40
+	for grupo in [[Color(0.55, 0.95, 0.60), 16, 1.6], [Color(1.0, 0.55, 0.20), 9, 1.8], [Color(1.0, 0.12, 0.08), 4, 2.0]]:
+		var lp := Malha.new()
+		for i in grupo[1]:
+			lp.cx(Vector3(rngp.randf_range(-0.75, 0.75), rngp.randf_range(-0.28, 0.06), ZI - 1.125), Vector3(0.03, 0.022, 0.01))
+		lp.no(Mat.liso(Color.BLACK, 0.5, 0, grupo[0], grupo[2]), casco, false)
+	var lpn := OmniLight3D.new()
+	lpn.light_color = Color(0.55, 0.85, 0.60)
+	lpn.light_energy = 0.28
+	lpn.omni_range = 1.6
+	lpn.position = Vector3(0, 0.1, ZI - 0.85)
+	casco.add_child(lpn)
+	# gente
+	var cores := [[Color(0.20, 0.08, 0.07), Color(0.06, 0.06, 0.08), Color(0.05, 0.035, 0.02)], [Color(0.34, 0.32, 0.28), Color(0.10, 0.09, 0.07), Color(0.22, 0.20, 0.18)], [Color(0.08, 0.12, 0.20), Color(0.05, 0.06, 0.10), Color(0.10, 0.05, 0.02)], [Color(0.12, 0.16, 0.10), Color(0.12, 0.10, 0.08), Color(0.02, 0.016, 0.012)]]
+	var peles := [Color(0.50, 0.35, 0.28), Color(0.30, 0.19, 0.13), Color(0.56, 0.41, 0.33), Color(0.40, 0.27, 0.20)]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 609
-	for q in [[0, 0], [0, 3], [1, 2], [2, 0], [2, 1], [3, 3], [4, 0], [5, 1], [6, 0], [7, 2], [7, 3], [8, 1], [9, 0], [10, 3], [11, 2], [4, 3], [3, 1], [9, 2]]:
+	for q in [[0, 0], [0, 2], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2], [3, 0], [4, 0], [4, 2], [5, 1], [5, 0], [6, 2], [-1, 0], [-1, 1]]:
 		var h := MeshInstance3D.new()
 		h.mesh = load("res://dados/humano.res")
 		var m := ShaderMaterial.new()
 		m.shader = load("res://shaders/humano.gdshader")
 		var c: Array = cores[rng.randi() % 4]
-		m.set_shader_parameter("camisa", c[0])
+		m.set_shader_parameter("camisa", c[0] if q[0] >= 0 else Color(0.62, 0.62, 0.60))
 		m.set_shader_parameter("calca", c[1])
 		m.set_shader_parameter("cabelo", c[2])
 		m.set_shader_parameter("pele", peles[rng.randi() % 4])
 		h.material_override = m
-		h.position = Vector3([-0.98, -0.50, 0.50, 0.98][q[1]], Aeronave.PISO + 0.46, -5.4 + (q[0] + 0.5) * 0.8 + 0.04)
-		h.rotation = Vector3(rng.randf_range(-0.06, 0.04), rng.randf_range(-0.12, 0.12), rng.randf_range(-0.05, 0.05))
-		h.scale = Vector3.ONE * rng.randf_range(0.94, 1.03)
+		if q[0] >= 0:
+			h.position = Vector3(Aeronave.BANCOS[q[1]], Aeronave.PISO + 0.44, ZI + (q[0] + 0.5) * 0.8 + 0.05)
+		else:
+			h.position = Vector3([-0.42, 0.42][q[1]], -0.36, ZI - 0.55)
+		h.rotation = Vector3(rng.randf_range(-0.06, 0.02), rng.randf_range(-0.14, 0.14), rng.randf_range(-0.06, 0.06))
+		h.scale = Vector3.ONE * rng.randf_range(0.93, 1.0)
 		casco.add_child(h)
 		_passag.append(h)
-	# luzes da cabine
-	for i in 4:
+	# o seu corpo
+	var eu := MeshInstance3D.new()
+	eu.mesh = load("res://dados/humano_corpo.res")
+	var me := ShaderMaterial.new()
+	me.shader = load("res://shaders/humano.gdshader")
+	me.set_shader_parameter("camisa", Color(0.16, 0.11, 0.07))
+	me.set_shader_parameter("calca", Color(0.06, 0.08, 0.14))
+	me.set_shader_parameter("pele", Color(0.52, 0.37, 0.29))
+	eu.material_override = me
+	eu.position = Vector3(Aeronave.BANCOS[2], Aeronave.PISO + 0.44, ZI + 3.5 * 0.8 + 0.05)
+	casco.add_child(eu)
+	# luz da cabine: fraca, de madrugada
+	for i in 3:
 		var l := OmniLight3D.new()
-		l.light_color = Color(1.0, 0.82, 0.58)
-		l.light_energy = 0.75
-		l.omni_range = 3.4
-		l.position = Vector3(0, 0.95, -4.8 + i * 2.9)
-		l.light_volumetric_fog_energy = 0.4
-		l.shadow_enabled = i == 1
+		l.light_color = Color(1.0, 0.80, 0.54)
+		l.light_energy = LUZ
+		l.omni_range = 2.6
+		l.position = Vector3(-0.1, 0.82, -2.3 + i * 2.2)
+		l.light_volumetric_fog_energy = 0.35
+		l.shadow_enabled = true
 		casco.add_child(l)
 		luzes.append(l)
-	var fa := Malha.new()
-	for sx in [-1.0, 1.0]:
-		fa.cx(Vector3(0.36 * sx, 1.32, -0.6), Vector3(0.10, 0.02, 11.4))
-	luzes.append(fa.no(Mat.liso(Color(0.4, 0.38, 0.32), 0.5, 0, Color(1.0, 0.84, 0.6), 0.75).duplicate(), casco))
+	# luzes de leitura acesas em algumas poltronas
+	for q in [[1, 1.0, 0.70], [4, -1.0, -0.68], [5, 1.0, 0.23]]:
+		var s := SpotLight3D.new()
+		s.light_color = Color(1.0, 0.86, 0.62)
+		s.light_energy = 2.6
+		s.spot_range = 2.2
+		s.spot_angle = 20
+		s.light_volumetric_fog_energy = 1.4
+		s.shadow_enabled = true
+		s.position = Vector3(q[2] * 0.92, 0.80, ZI + (q[0] + 0.5) * 0.8 - 0.1)
+		s.rotation.x = -PI * 0.5
+		casco.add_child(s)
+		leitura.append(s)
+	for k in serv.lampadas.size():
+		if k in [2, 4, 14, 16]:
+			serv.lampadas[k][0].material_override.emission_energy_multiplier = 6.0
+	calha = serv.calha.mesh.surface_get_material(0)
 	luz_em = OmniLight3D.new()
 	luz_em.light_color = Color(1.0, 0.06, 0.03)
 	luz_em.light_energy = 0.0
-	luz_em.omni_range = 7.0
-	luz_em.position = Vector3(0, 0.6, -4.4)
+	luz_em.omni_range = 5.5
+	luz_em.shadow_enabled = true
+	luz_em.position = Vector3(-0.2, 0.75, -2.5)
 	casco.add_child(luz_em)
 	luz_fogo = OmniLight3D.new()
 	luz_fogo.light_color = Color(1.0, 0.45, 0.12)
 	luz_fogo.light_energy = 0.0
-	luz_fogo.omni_range = 16.0
+	luz_fogo.omni_range = 14.0
 	luz_fogo.shadow_enabled = true
-	luz_fogo.position = asa.motor + Vector3(0, 0.7, 0)
+	luz_fogo.position = asa.motor + Vector3(0, 0.75, 0)
 	luz_fogo.light_volumetric_fog_energy = 1.2
 	casco.add_child(luz_fogo)
-	# luzes de navegacao
+	# luz de navegacao
 	var nv := OmniLight3D.new()
 	nv.light_color = Color(0.1, 1.0, 0.3)
-	nv.light_energy = 1.2
-	nv.omni_range = 4
+	nv.light_energy = 1.0
+	nv.omni_range = 3
 	nv.position = asa.ponta
 	casco.add_child(nv)
 	var nb := Malha.new()
-	nb.cx(asa.ponta, Vector3(0.12, 0.1, 0.3))
+	nb.cx(asa.ponta, Vector3(0.10, 0.07, 0.24))
 	nb.no(Mat.liso(Color.BLACK, 0.4, 0, Color(0.1, 1.0, 0.3), 5.0), casco)
-	# aviso de cinto
-	aviso_cinto = MeshInstance3D.new()
-	var qm := QuadMesh.new()
-	qm.size = Vector2(0.34, 0.17)
-	aviso_cinto.mesh = qm
-	aviso_cinto.position = Vector3(0.62, 0.80, -6.34)
-	aviso_cinto.material_override = Mat.placa("placa_cinto.png", 0.0).duplicate()
-	casco.add_child(aviso_cinto)
 	# mascaras (guardadas)
-	for i in 13:
+	for i in 7:
 		for sx in [-1.0, 1.0]:
 			var n := Node3D.new()
-			n.position = Vector3(0.66 * sx, 0.68, -5.15 + i * 0.8)
+			n.position = Vector3(0.56 * sx, 0.84, ZI + (i + 0.5) * 0.8 - 0.06)
 			n.visible = false
 			var mm := Malha.new()
-			mm.tubo([Vector3.ZERO, Vector3(0.01, -0.22, 0.01), Vector3(0, -0.42, 0)], [0.005, 0.005, 0.005], 4)
-			mm.no(Mat.liso(Color(0.8, 0.8, 0.75), 0.6), n)
+			mm.tubo([Vector3.ZERO, Vector3(0.012, -0.16, 0.01), Vector3(-0.006, -0.32, 0.004), Vector3(0, -0.44, 0)], [0.0045, 0.0045, 0.0045, 0.0045], 6)
+			mm.no(Mat.liso(Color(0.62, 0.62, 0.58), 0.4), n)
 			var mk := Malha.new()
-			mk.tubo([Vector3(0, -0.42, 0), Vector3(0, -0.50, 0)], [0.028, 0.048], 10)
-			mk.no(Mat.liso(Color(0.80, 0.60, 0.08), 0.5, 0, Color.BLACK, 0, true), n)
+			mk.tubo([Vector3(0, -0.44, 0), Vector3(0, -0.452, 0), Vector3(0, -0.49, 0), Vector3(0, -0.515, 0)], [0.012, 0.034, 0.042, 0.050], 18)
+			mk.no(Mat.liso(Color(0.72, 0.50, 0.05), 0.42, 0, Color.BLACK, 0, true), n)
+			var bg := Malha.new()
+			bg.tubo([Vector3(0, -0.30, 0.02), Vector3(0.01, -0.36, 0.03), Vector3(0, -0.43, 0.01)], [0.006, 0.032, 0.008], 10)
+			bg.no(Mat.liso(Color(0.66, 0.66, 0.62, 0.6), 0.2), n)
 			casco.add_child(n)
 			mascaras.append(n)
 	# objetos que voam
@@ -219,7 +284,7 @@ func construir() -> void:
 		mi.cx(Vector3.ZERO, Vector3(rng.randf_range(0.08, 0.4), rng.randf_range(0.04, 0.2), rng.randf_range(0.1, 0.3)))
 		var no := mi.no(Mat.liso([Color(0.15, 0.07, 0.05), Color(0.05, 0.07, 0.13), Color(0.6, 0.58, 0.5)][i % 3], 0.6), casco)
 		no.visible = false
-		_soltos.append({"n": no, "p": Vector3(rng.randf_range(-0.7, 0.7), 1.0, rng.randf_range(-6, 3)), "v": Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-4, -1)), "r": Vector3(rng.randf(), rng.randf(), rng.randf()) * 6.0})
+		_soltos.append({"n": no, "p": Vector3(rng.randf_range(-0.6, 0.6), 0.7, rng.randf_range(-3, 2.5)), "v": Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-4, -1)), "r": Vector3(rng.randf(), rng.randf(), rng.randf()) * 6.0})
 	# fogo do motor (apagado) e fagulhas na cabine
 	var ff := Node3D.new()
 	ff.name = "Fogo"
@@ -271,7 +336,7 @@ func construir() -> void:
 	var sq := QuadMesh.new()
 	sq.material = Mat.sprite(Color(1, 1, 1), 8.0, true)
 	_fagulhas.draw_pass_1 = sq
-	_fagulhas.position = Vector3(-0.3, 1.2, -2.4)
+	_fagulhas.position = Vector3(-0.3, 0.95, -1.6)
 	casco.add_child(_fagulhas)
 	# nuvens que passam
 	for i in 26:
@@ -330,8 +395,8 @@ func construir() -> void:
 		e.material_override = Mat.liso(Color.BLACK, 0.2, 0, Color(0.85, 0.95, 0.8), 6.0)
 		e.position = Vector3(0.060 * sx, 2.026, -1.168)
 		olhos_janela.add_child(e)
-	olhos_janela.position = Vector3(3.0, -0.35, -1.2)
-	olhos_janela.rotation = Vector3(-0.95, 0.9, 0)
+	olhos_janela.position = Vector3(2.15, -1.02, -0.75)
+	olhos_janela.rotation = Vector3(0.0, 1.15, 0)
 	olhos_janela.visible = false
 	casco.add_child(olhos_janela)
 
@@ -341,7 +406,7 @@ func construir() -> void:
 	cam.far = 3500
 	cam.environment = env
 	casco.add_child(cam)
-	cam.position = Vector3(0.92, 0.45, -0.20)
+	cam.position = Vector3(0.66, 0.40, -0.36)
 	yaw = -0.35
 
 
@@ -392,7 +457,7 @@ func _process(dt: float) -> void:
 	for k in ["helice"]:
 		asa[k].rotation.z += dt * (46.0 if t < 53.0 else maxf(0.0, 46.0 - (t - 53.0) * 9.0))
 	# turbulencia
-	turb = lerpf(turb, turb_alvo, dt * 1.6)
+	turb = lerpf(turb, turb_alvo, minf(1.0, dt * 1.6))
 	var a := t
 	var sx := sin(a * 1.7) * 0.35 + sin(a * 7.3) * 0.3 + sin(a * 17.0) * 0.18 + sin(a * 31.0) * 0.12
 	var sy := sin(a * 2.3 + 1.0) * 0.35 + sin(a * 9.1) * 0.3 + sin(a * 21.0) * 0.2 + sin(a * 37.0) * 0.14
@@ -404,7 +469,7 @@ func _process(dt: float) -> void:
 		tempo_prot_max += dt
 		tempo_prot += dt * protegendo
 	var ch := Vector3(sin(a * 43.0), sin(a * 53.0), sin(a * 61.0)) * 0.012 * turb
-	cam.position = Vector3(0.92, 0.45 - 0.30 * protegendo, -0.20 - 0.22 * protegendo) + ch + Vector3(sx, sy, 0) * 0.018 * turb
+	cam.position = Vector3(0.66, 0.40 - 0.26 * protegendo, -0.36 - 0.18 * protegendo) + ch + Vector3(sx, sy, 0) * 0.018 * turb
 	cam.rotation = Vector3(pitch - 0.75 * protegendo * (1.0 - absf(pitch) * 0.3) + ch.y * 2.2 + sin(t * 0.9) * 0.004, yaw * (1.0 - 0.6 * protegendo) + ch.x * 2.0, ch.z * 2.4 - casco.rotation.z * 0.15)
 	# luzes
 	_apag -= dt
@@ -412,9 +477,16 @@ func _process(dt: float) -> void:
 	if t > 46.0 and t < 53.0: liga = 1.0 if sin(t * 23.0) + sin(t * 37.0) > -0.8 else 0.15
 	if t >= 53.0: liga = 0.0
 	if t >= 53.0 and t < 58.0 and sin(t * 41.0) > 0.7: liga = 0.7
-	for i in luzes.size() - 1:
-		luzes[i].light_energy = 0.75 * liga
-	(luzes[-1].material_override if luzes[-1].material_override else luzes[-1].mesh.surface_get_material(0)).emission_energy_multiplier = 0.75 * liga
+	for i in luzes.size():
+		luzes[i].light_energy = LUZ * liga
+	for s in leitura:
+		s.light_energy = 2.6 * liga
+	calha.emission_energy_multiplier = 0.9 * liga
+	for k in [2, 4, 14, 16]:
+		if k < serv.lampadas.size():
+			serv.lampadas[k][0].material_override.emission_energy_multiplier = 6.0 * liga
+	if disco:
+		disco.visible = t < 54.0
 	if t > 53.5:
 		luz_em.light_energy = 0.75 * (0.5 + 0.5 * sin(t * 5.2))
 	if t > 53.0:
@@ -434,9 +506,9 @@ func _process(dt: float) -> void:
 		for s in _soltos:
 			s.n.visible = true
 			s.p += s.v * dt * (0.4 + turb * 0.5)
-			if s.p.z < -6.2: s.p = Vector3(randf_range(-0.7, 0.7), randf_range(-0.4, 1.0), randf_range(1.0, 5.0))
-			if absf(s.p.x) > 1.0: s.v.x *= -1.0
-			if s.p.y > 1.1 or s.p.y < -0.6: s.v.y *= -1.0
+			if s.p.z < -3.0: s.p = Vector3(randf_range(-0.6, 0.6), randf_range(-0.3, 0.7), randf_range(0.8, 3.0))
+			if absf(s.p.x) > 0.85: s.v.x *= -1.0
+			if s.p.y > 0.85 or s.p.y < -0.5: s.v.y *= -1.0
 			s.n.position = s.p
 			s.n.rotation += s.r * dt
 	# orbe
@@ -463,10 +535,11 @@ func _roteiro(dt: float) -> void:
 		Som.toca("batida_metal", -10, 0.6)
 	if _uma("ch2", 37.0):
 		Som.toca("av_chime", -6)
-		var m: StandardMaterial3D = aviso_cinto.material_override
-		m.emission_enabled = true
-		m.emission_texture = Mat.tex("placa_cinto.png")
-		m.emission_energy_multiplier = 2.2
+		for q in serv.avisos:
+			var m: StandardMaterial3D = q.material_override
+			m.emission_enabled = true
+			m.emission_texture = Mat.tex("placa_cinto.png")
+			m.emission_energy_multiplier = 2.0
 	if _uma("p2", 38.4):
 		Som.toca("v_piloto2", -2, 1.0, "Voz")
 		Jogo.falar("comandante", "Senhores, apertem os cintos. Vamos atravessar uma área de turbulência.", 5.0)

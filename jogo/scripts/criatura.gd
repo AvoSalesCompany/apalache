@@ -201,6 +201,8 @@ func _sentir(dt: float) -> void:
 	if j.agachado: alc *= 0.55
 	alc *= lerpf(1.0, 0.16, j.escondido)
 	if estado == E.CACA: alc *= 1.9
+	if j.lanterna.luz.visible and j.escondido < 0.6:
+		alc = maxf(alc * 1.25, 30.0 if j.lanterna.ilumina(global_position + Vector3.UP * 1.5) < 0.05 else 44.0)
 	if d < alc and ang < 72.0:
 		var ob := Mundo.obstrucao(global_position + Vector3.UP * 2.0, p + Vector3.UP * (0.9 if j.agachado else 1.5))
 		var vis := (1.0 - d / alc) * clampf(1.2 - ob, 0.0, 1.0)
@@ -224,7 +226,7 @@ func _sentir(dt: float) -> void:
 
 ## barulho pontual (pedra, grito, galho)
 func ouvir(p: Vector3, alcance: float, forte: bool = false) -> void:
-	if estado in [E.OCULTO, E.CACA, E.ATAQUE, E.RECUA, E.TORRE]:
+	if estado in [E.OCULTO, E.CACA, E.ATAQUE, E.RECUA, E.TORRE] or Jogo.etapa < 4:
 		return
 	if global_position.distance_to(p) < alcance:
 		ultimo_visto = p
@@ -234,7 +236,7 @@ func ouvir(p: Vector3, alcance: float, forte: bool = false) -> void:
 
 
 func _physics_process(dt: float) -> void:
-	if estado == E.OCULTO or Jogo.jogador == null:
+	if estado == E.OCULTO or Jogo.jogador == null or (Jogo.hud and Jogo.hud.lendo):
 		return
 	t_estado += dt
 	match estado:
@@ -292,8 +294,8 @@ func _observa(dt: float) -> void:
 	var d := dist_jog()
 	if t_visto > 2.2:
 		em_pe_alvo = 1.0          # levanta, devagar, sem tirar os olhos
-	if t_visto > 4.4 or d < 13.0 or t_estado > 40.0:
-		if d < 13.0 and agressao > 0.2:
+	if t_visto > 4.4 or d < (13.0 if Jogo.etapa >= 4 else 24.0) or t_estado > 40.0:
+		if d < 11.0 and Jogo.etapa >= 4:
 			ultimo_visto = Jogo.jogador.global_position
 			muda(E.CACA)
 		else:

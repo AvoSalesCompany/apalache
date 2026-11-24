@@ -10,6 +10,7 @@ var preto := 1.0
 var preto_alvo := 1.0
 var preto_vel := 1.0
 var branco := 0.0
+var pisca := 0.0
 var tonto := 0.0
 var dano := 0.0
 var lendo := false
@@ -44,6 +45,8 @@ class Indicadores extends Control:
 	var fol := 1.0
 	var seg := 0.0
 	var esc := 0.0
+	var bat := 0.0
+	var tem_bat := false
 	var a_luz := 0.0
 	var a_vida := 0.0
 	var a_frio := 0.0
@@ -66,6 +69,13 @@ class Indicadores extends Control:
 			draw_arc(c, 14, 0, TAU, 40, Color(0.75, 0.82, 0.95, 0.35 * a_luz), 1.2, true)
 			if esc > 0.5:
 				draw_arc(c, 19, 0, TAU, 40, Color(0.45, 0.75, 0.5, 0.7 * a_luz), 1.6, true)
+		if tem_bat:
+			var bx := Vector2(44, h - 112)
+			draw_rect(Rect2(bx, Vector2(26, 13)), Color(0.8, 0.8, 0.75, 0.45 * a_luz), false, 1.3)
+			draw_rect(Rect2(bx + Vector2(27, 4), Vector2(3, 5)), Color(0.8, 0.8, 0.75, 0.45 * a_luz))
+			for i in 4:
+				if bat > i * 0.25 + 0.02:
+					draw_rect(Rect2(bx + Vector2(3 + i * 5.4, 3), Vector2(4, 7)), Color(0.95, 0.80, 0.45, 0.8 * a_luz) if bat > 0.2 else Color(0.9, 0.2, 0.12, 0.8 * a_luz))
 		_barra(Vector2(92, h - 66), 150, fol, Color(0.85, 0.85, 0.80), a_fol)
 		_barra(Vector2(92, h - 54), 150, vida, Color(0.70, 0.12, 0.10), a_vida)
 		_barra(Vector2(92, h - 42), 150, 1.0 - frio, Color(0.45, 0.68, 0.90), a_frio)
@@ -229,6 +239,8 @@ func fechar_nota() -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
+	if Teste.ativo:
+		return
 	if lendo and not get_tree().paused:
 		if e.is_action_pressed("usar") or e.is_action_pressed("diario") or e.is_action_pressed("pausa"):
 			get_viewport().set_input_as_handled()
@@ -242,11 +254,11 @@ func abrir_diario() -> void:
 	var t := ""
 	if Jogo.objetivo != "":
 		t += "AGORA:  " + Jogo.objetivo + "\n\n"
-	var nomes := {"jaqueta": "Jaqueta de lona", "bussola": "Bússola  [C]", "curativo": "Curativos  [H]", "pedra": "Pedras do rio  [F]", "chave": "Chave — Torre 4", "fosforos": "Fósforos"}
+	var nomes := {"jaqueta": "Jaqueta de lona", "bussola": "Bússola  [C]", "curativo": "Curativos  [H]", "pedra": "Pedras do rio  [clique]", "lanterna": "Lanterna  [F]", "pilha": "Pilhas", "chave": "Chave — Torre 4", "fosforos": "Fósforos"}
 	var li := ""
 	for k in nomes:
 		if Jogo.tem(k) > 0:
-			li += "   •  " + nomes[k] + ("  ×%d" % Jogo.tem(k) if k in ["curativo", "pedra"] else "") + "\n"
+			li += "   •  " + nomes[k] + ("  ×%d" % Jogo.tem(k) if k in ["curativo", "pedra", "pilha"] else "") + "\n"
 	t += "COM VOCÊ:\n" + (li if li != "" else "   nada\n")
 	if Jogo.notas.size() > 0:
 		t += "\nO QUE VOCÊ LEU:\n"
@@ -300,6 +312,10 @@ func escurecer(alvo: float, dur: float) -> void:
 		preto = alvo
 
 
+func piscar(s: float) -> void:
+	pisca = maxf(pisca, s)
+
+
 func limpar() -> void:
 	_leg.text = ""
 	_leg_quem.text = ""
@@ -325,7 +341,8 @@ func _process(dt: float) -> void:
 	_aviso.modulate.a = clampf(_aviso_t, 0.0, 1.0)
 	_obj_t -= dt
 	_obj.modulate.a = move_toward(_obj.modulate.a, 1.0 if _obj_t > 0.0 else 0.0, dt * 1.2)
-	pos.set_shader_parameter("preto", preto)
+	pisca = maxf(0.0, pisca - dt)
+	pos.set_shader_parameter("preto", maxf(preto, 0.97 * smoothstep(0.0, 0.10, pisca)))
 	pos.set_shader_parameter("branco", branco)
 	pos.set_shader_parameter("tonto", tonto)
 	pos.set_shader_parameter("gama", 1.0 / Jogo.gama)
@@ -347,6 +364,8 @@ func _process(dt: float) -> void:
 		_ind.fol = j.folego / 100.0
 		_ind.seg = j.prog_segurar()
 		_ind.esc = j.escondido
+		_ind.bat = j.lanterna.bateria / 100.0
+		_ind.tem_bat = j.lanterna.ligada
 		_ind.a_luz = move_toward(_ind.a_luz, 0.9 if not j.travado else 0.0, dt)
 		_ind.a_fol = move_toward(_ind.a_fol, 1.0 if j.folego < 99.0 else 0.0, dt * 2.0)
 		_ind.a_vida = move_toward(_ind.a_vida, 1.0 if j.vida < 99.0 else 0.0, dt)

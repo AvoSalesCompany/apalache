@@ -6,13 +6,15 @@ extends Node
 func _ready() -> void:
 	var a := OS.get_cmdline_user_args()
 	if a.is_empty():
-		a = PackedStringArray(["mundo", "criatura", "humano", "impostor"])
+		a = PackedStringArray(["mundo", "criatura", "humano", "poltrona", "vigia", "impostor"])
 	for q in a:
 		var t0 := Time.get_ticks_msec()
 		match q:
 			"mundo": _mundo()
 			"criatura": _criatura()
 			"humano": _humano()
+			"poltrona": _poltrona()
+			"vigia": _vigia()
 			"impostor": await _impostor()
 		print("assado: ", q, " em ", (Time.get_ticks_msec() - t0) / 1000.0, " s")
 	get_tree().quit()
@@ -358,6 +360,91 @@ func _criatura() -> void:
 
 # ---------------------------------------------------------------- passageiro sentado
 func _humano() -> void:
+	_humano_de(true, "res://dados/humano.res")
+	_humano_de(false, "res://dados/humano_corpo.res")
+
+
+# poltrona estofada (tecido)
+func _poltrona() -> void:
+	var s := Sdf.new()
+	s.k = 0.035
+	s.caixa(Vector3(0, 0.40, 0.0), Vector3(0.205, 0.065, 0.225), 0.045, -0.06)
+	s.caixa(Vector3(0, 0.425, -0.17), Vector3(0.195, 0.05, 0.07), 0.04, -0.05)
+	# encosto inclinado com abas
+	s.caixa(Vector3(0, 0.72, 0.265), Vector3(0.200, 0.30, 0.050), 0.045, 0.20)
+	for sx in [-1.0, 1.0]:
+		s.caixa(Vector3(0.165 * sx, 0.70, 0.235), Vector3(0.045, 0.24, 0.045), 0.04, 0.20)
+		s.caixa(Vector3(0.165 * sx, 0.445, -0.02), Vector3(0.04, 0.035, 0.19), 0.03, -0.05)
+		s.caixa(Vector3(0.150 * sx, 1.02, 0.300), Vector3(0.05, 0.085, 0.05), 0.04, 0.20)
+	s.caixa(Vector3(0, 0.60, 0.225), Vector3(0.14, 0.05, 0.03), 0.028, 0.20)
+	s.caixa(Vector3(0, 1.02, 0.325), Vector3(0.165, 0.10, 0.045), 0.042, 0.20)
+	var d := s.gerar(AABB(Vector3(-0.28, 0.26, -0.32), Vector3(0.56, 0.94, 0.80)), 0.0165)
+	print("poltrona vertices ", d.v.size())
+	ResourceSaver.save(Sdf.malha(d), "res://dados/poltrona.res", ResourceSaver.FLAG_COMPRESS)
+
+
+# os dezoito: passageiros de pe, altos demais, boca aberta demais
+func _vigia() -> void:
+	var pele := Color(1, 0, 0)
+	var cam := Color(0, 1, 0)
+	var cal := Color(0, 0, 1)
+	var cab := Color(0, 0, 0)
+	for modo in [0, 1, 2]:
+		var s := Sdf.new()
+		s.k = 0.030
+		if modo < 2:
+			s.cap(Vector3(0, 1.10, 0), Vector3(0, 1.34, 0.01), 0.125, 0.105, 0, cam)
+			s.cap(Vector3(0, 1.34, 0.01), Vector3(0, 1.62, 0.0), 0.11, 0.14, 0, cam)
+			s.cap(Vector3(-0.17, 1.69, 0.0), Vector3(0.17, 1.69, 0.0), 0.065, 0.065, 0, cam)
+			# gola, pescoco comprido e cabeca caida de lado
+			s.cap(Vector3(-0.07, 1.735, -0.01), Vector3(0.07, 1.735, -0.01), 0.055, 0.055, 0, cam)
+			s.cap(Vector3(0, 1.70, 0), Vector3(0.02, 1.95, -0.035), 0.043, 0.037, 0, pele)
+			s.cap(Vector3(0.048, 2.115, -0.035), Vector3(0.042, 2.06, -0.065), 0.088, 0.070, 0, pele)
+			# queixo deslocado: boca aberta demais
+			s.cap(Vector3(0.030, 1.965, -0.085), Vector3(0.018, 1.885, -0.085), 0.046, 0.036, 0, pele)
+			s.cap(Vector3(0.018, 1.885, -0.085), Vector3(0.015, 1.868, -0.10), 0.034, 0.026, 0, pele)
+			# nariz, orbitas fundas e cabelo
+			s.cap(Vector3(0.045, 2.065, -0.135), Vector3(0.040, 2.035, -0.148), 0.013, 0.015, 0, pele)
+			for ex in [-1.0, 1.0]:
+				s.cap(Vector3(0.045 + 0.034 * ex, 2.078, -0.126), Vector3(0.045 + 0.036 * ex, 2.070, -0.122), 0.016, 0.015, 0, cab)
+				s.cap(Vector3(0.05 + 0.080 * ex, 2.13, 0.0), Vector3(0.04 + 0.086 * ex, 2.00, 0.005), 0.040, 0.026, 0, cab)
+			s.cap(Vector3(0.05, 2.165, -0.02), Vector3(0.05, 2.08, 0.04), 0.080, 0.075, 0, cab)
+			s.cap(Vector3(0.0, 2.175, -0.075), Vector3(0.09, 2.18, -0.07), 0.035, 0.035, 0, cab)
+			s.cap(Vector3(0.05, 2.06, 0.05), Vector3(0.04, 1.92, 0.045), 0.055, 0.030, 0, cab)
+			# paleto: barra e lapelas
+			s.cap(Vector3(-0.10, 1.12, 0), Vector3(0.10, 1.12, 0), 0.135, 0.135, 0, cam)
+			s.cap(Vector3(-0.05, 1.66, -0.11), Vector3(-0.02, 1.40, -0.125), 0.022, 0.016, 0, cam)
+			s.cap(Vector3(0.05, 1.66, -0.11), Vector3(0.02, 1.40, -0.125), 0.022, 0.016, 0, cam)
+			for sx in [-1.0, 1.0]:
+				if modo == 1 and sx > 0: continue
+				s.cap(Vector3(0.21 * sx, 1.66, 0), Vector3(0.26 * sx, 1.28, 0.02), 0.052, 0.040, 0, cam)
+				s.cap(Vector3(0.26 * sx, 1.28, 0.02), Vector3(0.25 * sx, 0.88, -0.04), 0.038, 0.026, 0, cam)
+				s.cap(Vector3(0.25 * sx, 0.88, -0.04), Vector3(0.25 * sx, 0.78, -0.05), 0.028, 0.026, 0, pele)
+				for dd in 4:
+					var ox := (dd - 1.5) * 0.018
+					s.cap(Vector3(0.25 * sx + ox, 0.77, -0.05), Vector3(0.245 * sx + ox * 1.6, 0.56, -0.07), 0.011, 0.005, 0, pele)
+				s.cap(Vector3(0.085 * sx, 1.10, 0), Vector3(0.10 * sx, 0.58, -0.02), 0.088, 0.055, 0, cal)
+				s.cap(Vector3(0.10 * sx, 0.58, -0.02), Vector3(0.10 * sx, 0.08, 0.02), 0.053, 0.038, 0, cal)
+				s.cap(Vector3(0.10 * sx, 0.045, 0.02), Vector3(0.11 * sx, 0.03, -0.13), 0.042, 0.032, 0, cab)
+			if modo == 1:
+				s.cap(Vector3(0.085, 1.10, 0), Vector3(0.10, 0.58, -0.02), 0.088, 0.055, 0, cal)
+				s.cap(Vector3(0.10, 0.58, -0.02), Vector3(0.10, 0.08, 0.02), 0.053, 0.038, 0, cal)
+				s.cap(Vector3(0.10, 0.045, 0.02), Vector3(0.11, 0.03, -0.13), 0.042, 0.032, 0, cab)
+				s.cap(Vector3(0.21, 1.66, 0), Vector3(0.24, 1.60, 0), 0.052, 0.045, 0, cam)
+		else:
+			# braco solto (origem no ombro), erguido
+			s.cap(Vector3.ZERO, Vector3(0.16, 0.34, 0.0), 0.05, 0.038, 0, cam)
+			s.cap(Vector3(0.16, 0.34, 0.0), Vector3(0.10, 0.74, -0.03), 0.037, 0.026, 0, cam)
+			s.cap(Vector3(0.10, 0.74, -0.03), Vector3(0.09, 0.84, -0.03), 0.028, 0.026, 0, pele)
+			for dd in 4:
+				var ox := (dd - 1.5) * 0.02
+				s.cap(Vector3(0.09 + ox, 0.85, -0.03), Vector3(0.085 + ox * 2.2, 1.06, -0.02), 0.011, 0.005, 0, pele)
+		var d := s.gerar(AABB(Vector3(-0.42, -0.06, -0.28), Vector3(0.84, 2.40, 0.5)), 0.0150)
+		print("vigia ", modo, " vertices ", d.v.size())
+		ResourceSaver.save(Sdf.malha(d), "res://dados/vigia%d.res" % modo, ResourceSaver.FLAG_COMPRESS)
+
+
+func _humano_de(cabeca: bool, arq: String) -> void:
 	var s := Sdf.new()
 	s.k = 0.05
 	var pele := Color(1, 0, 0)
@@ -367,12 +454,13 @@ func _humano() -> void:
 	s.cap(Vector3(0, 0.13, 0.02), Vector3(0, 0.34, 0.03), 0.145, 0.135, 0, cam)
 	s.cap(Vector3(0, 0.34, 0.03), Vector3(0, 0.54, 0.02), 0.14, 0.15, 0, cam)
 	s.cap(Vector3(-0.13, 0.57, 0.02), Vector3(0.13, 0.57, 0.02), 0.085, 0.085, 0, cam)
-	s.cap(Vector3(0, 0.60, 0.02), Vector3(0, 0.71, -0.01), 0.055, 0.052, 0, pele)
-	s.cap(Vector3(0, 0.83, -0.01), Vector3(0, 0.78, -0.045), 0.092, 0.072, 0, pele)
-	s.cap(Vector3(0, 0.80, -0.11), Vector3(0, 0.785, -0.125), 0.014, 0.012, 0, pele)
-	s.cap(Vector3(0, 0.86, 0.012), Vector3(0, 0.80, 0.05), 0.092, 0.075, 0, cab)
+	if cabeca:
+		s.cap(Vector3(0, 0.60, 0.02), Vector3(0, 0.71, -0.01), 0.055, 0.052, 0, pele)
+		s.cap(Vector3(0, 0.83, -0.01), Vector3(0, 0.78, -0.045), 0.092, 0.072, 0, pele)
+		s.cap(Vector3(0, 0.80, -0.11), Vector3(0, 0.785, -0.125), 0.014, 0.012, 0, pele)
+		s.cap(Vector3(0, 0.86, 0.012), Vector3(0, 0.80, 0.05), 0.092, 0.075, 0, cab)
 	for sx in [-1.0, 1.0]:
-		s.cap(Vector3(0.088 * sx, 0.80, 0.0), Vector3(0.094 * sx, 0.78, 0.0), 0.018, 0.015, 0, pele)
+		if cabeca: s.cap(Vector3(0.088 * sx, 0.80, 0.0), Vector3(0.094 * sx, 0.78, 0.0), 0.018, 0.015, 0, pele)
 		s.cap(Vector3(0.19 * sx, 0.56, 0.02), Vector3(0.235 * sx, 0.30, 0.03), 0.062, 0.05, 0, cam)
 		s.cap(Vector3(0.235 * sx, 0.30, 0.03), Vector3(0.13 * sx, 0.20, -0.22), 0.047, 0.036, 0, cam)
 		s.cap(Vector3(0.12 * sx, 0.195, -0.24), Vector3(0.07 * sx, 0.18, -0.31), 0.034, 0.026, 0, pele)
@@ -381,7 +469,7 @@ func _humano() -> void:
 		s.cap(Vector3(0.12 * sx, -0.38, -0.40), Vector3(0.13 * sx, -0.39, -0.54), 0.046, 0.036, 0, cab)
 	var d := s.gerar(AABB(Vector3(-0.36, -0.48, -0.66), Vector3(0.72, 1.5, 0.92)), 0.019)
 	print("humano vertices ", d.v.size())
-	ResourceSaver.save(Sdf.malha(d), "res://dados/humano.res", ResourceSaver.FLAG_COMPRESS)
+	ResourceSaver.save(Sdf.malha(d), arq, ResourceSaver.FLAG_COMPRESS)
 
 
 # ---------------------------------------------------------------- fotos das arvores distantes

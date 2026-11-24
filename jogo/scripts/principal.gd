@@ -51,6 +51,10 @@ func _ready() -> void:
 	dir.process_mode = Node.PROCESS_MODE_PAUSABLE
 	fl.add_child(dir)
 	Jogo.diretor = dir
+	var an := Anomalias.new()
+	an.process_mode = Node.PROCESS_MODE_PAUSABLE
+	fl.add_child(an)
+	Jogo.anomalias = an
 	his = Historia.new()
 	his.process_mode = Node.PROCESS_MODE_PAUSABLE
 	fl.add_child(his)
@@ -85,6 +89,7 @@ func _ao_menu() -> void:
 		Jogo.jogador = null
 		Jogo.criatura = null
 		Jogo.floresta = null
+		Jogo.anomalias = null
 		get_tree().reload_current_scene()
 		return
 	fase = "menu"
@@ -221,6 +226,11 @@ func _teste() -> void:
 		av.pitch = deg_to_rad(ol.y)
 		if Teste.a.has("foto"): Teste.fotografar()
 		return
+	if Teste.a.has("previa"):
+		var pv = load("res://scripts/previa.gd").new()
+		pv.pr = self
+		add_child(pv)
+		return
 	if Teste.a.has("robo"):
 		fase = "floresta"
 		var r = load("res://scripts/robo.gd").new()
@@ -279,6 +289,19 @@ func teste_cena(q: Dictionary) -> void:
 	if q.has("itens"):
 		for k in q.itens: Jogo.dar(k)
 	if q.has("etapa"): Jogo.etapa = int(q.etapa)
+	if q.has("lanterna"):
+		Jogo.itens["lanterna"] = 1
+		jog.lanterna.ligada = float(q.lanterna) > 0
+		jog.lanterna.bateria = 100.0
+	for v in Jogo.anomalias.ativos:
+		if is_instance_valid(v): v.queue_free()
+	Jogo.anomalias.ativos.clear()
+	if q.has("vigias"):
+		for pv in q.vigias:
+			var vg := Vigia.new().montar(pv.size() > 2 and float(pv[2]) > 0)
+			fl.add_child(vg)
+			vg.por(Vector3(float(pv[0]), 0, float(pv[1])), jog.global_position)
+			Jogo.anomalias.ativos.append(vg)
 	if q.has("fogao"): his._luz_fogao()
 	var x := float(q.pos[0])
 	var z := float(q.pos[1])

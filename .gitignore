@@ -1,0 +1,18 @@
+# Godot: cache regeneravel
+.godot/
+*.tmp
+
+# binarios locais (baixe pelo README)
+ferramentas/godot/
+ferramentas/templates/
+ferramentas/download/
+
+# builds (vao em Releases, nao no repositorio)
+build/
+*.exe
+*.pck
+*.zip
+
+# Windows
+Thumbs.db
+desktop.ini

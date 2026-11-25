@@ -5,7 +5,7 @@ uniform vec3 camisa : source_color = vec3(0.2, 0.25, 0.32);
 uniform vec3 calca : source_color = vec3(0.08, 0.09, 0.12);
 uniform vec3 cabelo : source_color = vec3(0.04, 0.028, 0.02);
 varying vec3 op;
-float h2(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+float h2(vec2 p) { vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 void vertex() { op = VERTEX; }
 void fragment() {
 	float s = max(0.001, COLOR.r + COLOR.g + COLOR.b);

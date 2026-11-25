@@ -88,6 +88,10 @@ func vai(p: Vector3, perto: float = 1.6, lim: float = 60.0, correr: bool = true)
 		j.robo = {"eixo": Vector2(lado, -1.0).normalized(), "agachar": agacha, "correr": correr and parado < 0.5, "pular": parado > 0.6 and fmod(parado, 0.8) < 0.05}
 		if parado > 9.0 or t > lim:
 			falhas += 1
+			for k in j.get_slide_collision_count():
+				var sc := j.get_slide_collision(k)
+				var o: Node = sc.get_collider()
+				diz("  toca %s/%s n=%s p=%s tam=%s" % [o.get_parent().name, o.name, sc.get_normal().snapped(Vector3.ONE * 0.1), loc.nos["fuselagem"].to_local(sc.get_position()).snapped(Vector3.ONE * 0.01), o.get_parent().mesh.get_aabb().size.snapped(Vector3.ONE * 0.01) if o.get_parent() is MeshInstance3D else ""])
 			diz("FALHA: preso em (%.1f, %.1f, %.1f) indo para (%.1f, %.1f)" % [j.global_position.x, j.global_position.y, j.global_position.z, p.x, p.z])
 			j.por_em(Vector3(p.x, maxf(Mundo.altura(p.x, p.z) + 0.1, p.y if p.y > 0.0 else -999.0), p.z), j.rotation.y)
 			j.robo = {}
@@ -100,7 +104,7 @@ func xz(x: float, z: float) -> Vector3:
 
 
 func usa(id: String, anda: bool = true) -> void:
-	var i: Interativo = loc.it[id]
+	var i: Interativo = loc.it[id] if loc.it.has(id) else pr.fl.vila.it[id]
 	if anda:
 		var q := i.global_position
 		await vai(Vector3(q.x, q.y, q.z), 1.35, 25.0, false)
@@ -137,10 +141,9 @@ func usa(id: String, anda: bool = true) -> void:
 func imortal() -> void:
 	while is_inside_tree():
 		await seg(0.5)
-		if not Teste.a.has("morte"):
-			j.vida = maxf(j.vida, 90.0)
-			j.frio = minf(j.frio, 60.0)
-			pr.cri.livre_ate = 1e12
+		j.vida = maxf(j.vida, 90.0)
+		j.frio = minf(j.frio, 60.0)
+
 
 
 func roda() -> void:
@@ -149,13 +152,19 @@ func roda() -> void:
 		pr._novo()
 		await ate(func(): return pr.fase == "aviao" and pr.av.rodando, 20, "decolar")
 		diz("voando")
+		await ate(func(): return pr.av._fase_com == 2, 90, "comissaria chegar")
+		diz("comissaria chegou em tp=%.1f" % pr.av.tp)
+		await ate(func(): return pr.av.lanche != "", 30, "escolher lanche")
+		diz("lanche: " + pr.av.lanche)
+		await ate(func(): return not pr.av.pre, 60, "fim da parte calma")
+		diz("comecaram os acontecimentos em tp=%.1f" % pr.av.tp)
 		await ate(func(): return pr.fase == "floresta", 130, "cair")
-		diz("caiu; vida_salva=%.0f" % Jogo.vida_salva)
+		diz("caiu; vida_salva=%.0f itens=%s" % [Jogo.vida_salva, Jogo.itens])
 		await ate(func(): return Jogo.etapa >= 1 and not j.travado and not j.so_olhar, 60, "acordar")
-		diz("acordou depois do voo em %s" % j.global_position)
+		diz("acordou depois do voo em %s hora=%.2f" % [j.global_position, pr.fl.clima.hora])
 		j.por_em(Mundo.chao(-289, -272), 0.0)
 		Jogo.etapa = 2
-		Jogo.salvar()
+		pr.his.salvar()
 		j.por_em(Mundo.chao(0, 0), 0.0)
 		j.vida = 20.0
 		pr.his.renascer()
@@ -168,7 +177,13 @@ func roda() -> void:
 		await get_tree().process_frame
 		pr.menu.pausa()
 		pr._retomar()
-		diz("retomou pausado=%s" % get_tree().paused)
+		pr.hud.inv.abre("itens")
+		await seg(0.3)
+		pr.hud.inv.mostra("mapa")
+		await seg(0.3)
+		pr.hud.inv.fecha()
+		diz("inventario abriu e fechou; travado=%s" % j.travado)
+		diz("VOO ok falhas=%d" % falhas)
 		get_tree().quit()
 		return
 	Jogo.nova_partida()
@@ -178,192 +193,239 @@ func roda() -> void:
 	j.cam.current = true
 	pr.fl.firmar(loc.nos["acorda"].global_position)
 	imortal()
+	var v: Vila = pr.fl.vila
+	if Teste.a.has("pula"):
+		await _pula(int(Teste.a.pula))
+	else:
+		await _dia(v)
+	if int(Teste.a.get("pula", 0)) < 5: await _noite(v)
+	if int(Teste.a.get("pula", 0)) < 7: await _torre(v)
+	await _cerco()
+
+
+## comeca direto numa etapa
+func _pula(e: int) -> void:
+	Jogo.flags = {"vivo": true, "pegou_mochila": true, "pegou_jaqueta": true, "pegou_lanterna": true, "falou_caleb": true, "falou_elias": true, "falou_ruth": true, "sopa": true}
+	Jogo.itens = {"mochila": 1, "mapa": 1, "lanterna": 1, "jaqueta": 1, "curativo": 2}
+	Jogo.etapa = e
+	var v: Vila = pr.fl.vila
+	if e == 3:
+		j.por_em((v.casas.ruth as Node3D).to_global(Vector3(2.0, 0.1, 0.5)), 0.0)
+		pr.fl.clima.por(18.2)
+	if e >= 6:
+		var tor: Node3D = loc.nos["torre"]
+		j.por_em(tor.to_global(Vector3(-6, 0.2, -0.6)), 0.0)
+		Jogo.flags["hora"] = 3.2
+		Jogo.flags["saiu_vila"] = true
+	if e >= 7:
+		var tor: Node3D = loc.nos["torre"]
+		var p := tor.to_global(Vector3(0.4, Locais.H_TORRE + 0.1, 1.2)) if not Teste.a.has("chao") else tor.to_global(Vector3(-7, 0.2, -3))
+		j.por_em(p, 0.0)
+		Jogo.itens["rifle"] = 1
+		Jogo.itens["municao"] = 20
+		for k in ["gerador", "portao", "radio", "pegou_rifle", "pegou_chave"]: Jogo.flags[k] = true
+	pr.his.salvar()
+	pr.his.comecar(false)
+	if e >= 7: j.rifle.pegar()
+	await seg(1.0)
+
+
+func _dia(v: Vila) -> void:
 	pr.his.comecar(true)
 	await ate(func(): return Jogo.etapa >= 1 and not j.travado and not j.so_olhar, 60, "acordar")
-	diz("acordou")
+	diz("acordou hora=%.2f" % pr.fl.clima.hora)
 	var nf := 0
 	var afund := 0
 	for o in pr.fl.locais.find_children("*", "RigidBody3D", true, false):
 		nf += 1
 		if o.global_position.y < Mundo.altura(o.global_position.x, o.global_position.z) - 0.25: afund += 1
-	diz("objetos fisicos=%d afundados=%d" % [nf, afund])
+	diz("objetos fisicos=%d afundados=%d mortos=%d" % [nf, afund, loc.mortos.size()])
 	await usa("lanterna")
+	await usa("mochila")
+	await usa("bussola")
+	await vai(loc.nos["fuselagem"].to_global(Vector3(2.6, 0, 0.2)), 1.0, 20, false)
+	await vai(loc.nos["fuselagem"].to_global(Vector3(0.4, 0, 0.2)), 0.7, 20, false)
 	await usa("jaqueta")
 	await usa("kit")
-	await usa("desenho")
-	await usa("bussola")
+	await vai(loc.nos["fuselagem"].to_global(Vector3(2.8, 0, 0.0)), 0.9, 20, false)
 	await ate(func(): return Jogo.etapa >= 2, 10, "etapa 2")
 	diz("saiu dos destrocos; itens=" + str(Jogo.itens))
-	if Teste.a.has("anom"):
-		await _anomalias()
-		return
-	if Teste.a.has("morte"):
-		pr.dir.emboscada(8.0)
-		await ate(func(): return Jogo.mortes > 0 or j.vida < 60.0, 60, "ataque")
-		diz("foi atacado")
-		await seg(6.0)
-		j.vida = 30.0
-		pr.cri.livre_ate = 0.0
-		pr.dir.emboscada(8.0)
-		await ate(func(): return Jogo.mortes > 0, 60, "morte")
-		diz("morreu")
-		await ate(func(): return not j.morto and not j.travado, 40, "renascer")
-		diz("renasceu em %s" % j.global_position)
-		Teste.a.erase("morte")
-		if Teste.a.has("so"):
-			get_tree().quit()
-			return
-	for q in [[-310, -292], [-289, -272], [-262, -243], [-232, -208], [-222, -186], [-212, -160], [-200, -136]]:
+	for q in Mundo.TRILHAS[0].slice(0, 8):
 		await vai(xz(q[0], q[1]), 3.0)
-	diz("desceu o riacho")
-	await usa("placa")
+	await vai(xz(-129.4, -79.8), 0.6)
+	await vai(xz(-118, -86.75), 0.6)
+	await vai(xz(-106.2, -94.0), 0.8)
+	diz("trilha feita hora=%.1f cri_visivel=%s vigias=%d" % [pr.fl.clima.hora, pr.cri.visible, Jogo.anomalias.ativos.size()])
+	await vai(xz(-92, -102), 3.0)
+	await ate(func(): return Jogo.etapa >= 3, 6, "etapa 3 (vila)")
+	diz("chegou na vila hora=%.1f" % pr.fl.clima.hora)
+	await usa("fala_caleb")
+	await fala()
+	await usa("fala_elias")
+	await fala()
+	diz("ouviu Elias hora=%.1f" % pr.fl.clima.hora)
+	var cr: Node3D = v.casas.ruth
+	await vai(cr.to_global(Vector3(-0.9, 0, 8.0)), 1.2)
+	await vai(cr.to_global(Vector3(-1.3, 0, 5.2)), 0.8, 20, false)
+	await usa("fala_ruth", false)
+	await fala()
+	await seg(6.0)
+	await vai(cr.to_global(Vector3(-1.5, 0, 4.1)), 0.5, 20, false)
+	await vai(cr.to_global(Vector3(-1.4, 0, 1.6)), 0.6, 20, false)
+	diz("dentro da casa abrigado=%s hora=%.1f" % [j.abrigado, pr.fl.clima.hora])
+	await vai(cr.to_global(Vector3(-0.6, 0, 0.75)), 0.4, 20, false)
+	await usa("sopa", false)
 	await seg(3.0)
-	diz("criatura: estado=%d visivel=%s dist=%.0f" % [pr.cri.estado, pr.cri.visible, pr.cri.dist_jog()])
-	for q in Mundo.TRILHAS[0]:
-		await vai(xz(q[0], q[1]), 2.5)
-	await ate(func(): return Jogo.etapa >= 3, 5, "etapa 3 (cabana)")
-	var cab: Node3D = loc.nos["cabana"]
-	await vai(cab.to_global(Vector3(0, 0, 6.2)), 1.2)
-	await vai(cab.to_global(Vector3(0, 0, 3.4)), 0.8, 20, false)
-	await usa("porta", false)
-	await seg(1.5)
-	await vai(cab.to_global(Vector3(0, 0, 0.6)), 0.5, 20, false)
-	diz("dentro da cabana, abrigado=%s" % j.abrigado)
-	await usa("diario")
-	await vai(cab.to_global(Vector3(-0.6, 0, 0.4)), 0.5, 20, false)
-	await usa("fogao")
-	await vai(cab.to_global(Vector3(0.4, 0, 0.4)), 0.5, 20, false)
-	await usa("curativo2")
-	await vai(cab.to_global(Vector3(-0.4, 0, 0.8)), 0.5, 20, false)
-	await usa("chave", false)
-	await ate(func(): return Jogo.etapa >= 4, 60, "batidas na porta")
-	diz("batidas terminaram; porta aberta=%s" % loc.porta_aberta)
-	if not loc.porta_aberta:
-		await vai(cab.to_global(Vector3(0.1, 0, 1.1)), 0.5, 20, false)
-		await usa("porta", false)
-		await seg(1.5)
-	await vai(cab.to_global(Vector3(0, 0, 5.8)), 0.9, 25, false)
-	for q in Mundo.TRILHAS[1].slice(0, 4):
-		await vai(xz(q[0], q[1]), 2.5)
-	await vai(Vector3(Mundo.CEMITERIO.x + 4.0, 0, Mundo.CEMITERIO.y + 7.4), 1.2)
-	await usa("cova")
-	await ate(func(): return not j.travado, 20, "fim da cena da cova")
-	for q in Mundo.TRILHAS[1].slice(4):
-		await vai(xz(q[0], q[1]), 2.5)
+	await fala()
+	await vai(cr.to_global(Vector3(0.5, 0, 1.15)), 0.5, 20, false)
+	await vai(cr.to_global(Vector3(2.1, 0, 1.1)), 0.5, 20, false)
+
+
+func fala() -> void:
+	await seg(0.4)
+	await ate(func(): return not pr.his.em_dialogo, 60, "fim da conversa")
+
+
+func _noite(v: Vila) -> void:
+	var cr: Node3D = v.casas.ruth
+	await vai(cr.to_global(Vector3(2.3, 0, -0.5)), 0.5, 20, false)
+	await ate(func(): return v.it["cama"].ativo, 10, "cama liberada")
+	await usa("cama", false)
+	if Jogo.etapa == 3 and v.it["cama"].ativo:
+		diz("ainda claro: hora=%.1f" % pr.fl.clima.hora)
+		await ate(func(): return pr.fl.clima.hora >= 17.7, 120, "escurecer")
+		await usa("cama", false)
+	await ate(func(): return Jogo.etapa == 4, 30, "noite")
+	diz("noite hora=%.2f" % pr.fl.clima.hora)
+	await ate(func(): return Jogo.etapa == 5, 90, "ataque")
+	diz("ataque comecou; porta=%s cri=%d" % [v.porta_aberta, pr.cri.estado])
+	await vai(cr.to_global(Vector3(2.0, 0, 1.1)), 0.5, 20, false)
+	await vai(cr.to_global(Vector3(0.6, 0, 1.15)), 0.5, 20, false)
+	await vai(cr.to_global(Vector3(-1.5, 0, 1.9)), 0.5, 20, false)
+	await vai(cr.to_global(Vector3(-1.5, 0, 4.3)), 0.5, 20, false)
+	await vai(cr.to_global(Vector3(-1.5, 0, 7.2)), 0.9, 20)
+	diz("saiu da casa")
+	if Teste.a.has("foto"):
+		for k in 4:
+			mira(pr.fl.vila.mundo(-6, 2) + Vector3.UP * 1.2)
+			await seg(1.6)
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_jpg("%s%d.jpg" % [Teste.a.foto, k], 0.92)
+	await seg(6.0)
+	diz("praca: cri=%d visivel=%s caleb_morto=%s" % [pr.cri.estado, pr.cri.visible, v.gente.caleb.morto])
+	for q in Mundo.TRILHAS[1].slice(1):
+		await vai(xz(q[0], q[1]), 3.0)
+	await ate(func(): return Jogo.etapa >= 6, 8, "chegar na torre")
+	diz("torre; vila destruida=%s mortes=%d" % [v.destruida, Jogo.mortes])
+
+
+func _torre(v: Vila) -> void:
 	var tor: Node3D = loc.nos["torre"]
 	await vai(tor.to_global(Vector3(-4.4, 0, -0.6)), 1.0)
-	diz("pe da torre")
+	await vai(tor.to_global(Vector3(-3.1, 0, -0.5)), 0.5, 20, false)
+	await usa("portao", false)
+	await usa("bilhete", false)
+	await vai(tor.to_global(Vector3(-4.6, 0, 0.4)), 0.7, 20, false)
+	var ob: Node3D = loc.nos["banheiro"]
+	await vai(ob.to_global(Vector3(0.3, 0, 2.6)), 0.6, 30, false)
+	await vai(ob.to_global(Vector3(0.2, 0, 1.9)), 0.4, 20, false)
+	await usa("porta_banheiro", false)
+	await seg(1.6)
+	await vai(ob.to_global(Vector3(0.2, 0, 0.35)), 0.35, 20, false)
+	await usa("privada", false)
+	diz("chave=%d" % Jogo.tem("chave"))
+	await seg(8.0)
+	await vai(ob.to_global(Vector3(0.2, 0, 2.6)), 0.6, 20, false)
+	await vai(loc.nos["gerador"].to_global(Vector3(0.0, 0, 1.6)), 0.7, 40)
+	await usa("gerador", false)
+	diz("gerador seco: " + Jogo.objetivo)
+	# volta para a vila
+	for k in range(Mundo.TRILHAS[1].size() - 1, 0, -1):
+		await vai(xz(Mundo.TRILHAS[1][k][0], Mundo.TRILHAS[1][k][1]), 3.0)
+	var ga: Node3D = v.casas.galpao
+	await vai(xz(Mundo.VILA.x + 3, Mundo.VILA.y - 3), 2.0)
+	await vai(xz(Mundo.VILA.x + 5, Mundo.VILA.y + 12), 2.0)
+	await vai(ga.to_global(Vector3(-0.6, 0, 7.0)), 1.0)
+	await vai(ga.to_global(Vector3(-0.7, 0, 4.4)), 0.7, 25, false)
+	await vai(ga.to_global(Vector3(-1.2, 0, -1.0)), 0.8, 25, false)
+	await vai(ga.to_global(Vector3(-1.7, 0, -3.2)), 0.5, 25, false)
+	await usa("gasolina", false)
+	diz("gasolina=%d" % Jogo.tem("gasolina"))
+	await seg(6.0)
+	diz("susto no galpao; cri=%d vida=%.0f" % [pr.cri.estado, j.vida])
+	await vai(ga.to_global(Vector3(-0.8, 0, 3.0)), 0.8, 25, false)
+	await vai(ga.to_global(Vector3(-0.6, 0, 7.4)), 1.0, 25)
+	await vai(xz(Mundo.VILA.x + 14, Mundo.VILA.y - 2), 2.0)
+	for q in Mundo.TRILHAS[1].slice(1):
+		await vai(xz(q[0], q[1]), 3.0)
+	await vai(loc.nos["gerador"].to_global(Vector3(0.0, 0, 1.6)), 0.7, 40)
+	await usa("gerador", false)
+	await seg(7.0)
+	diz("luz da torre=%.1f" % loc.luzes_torre[1][0].light_energy)
+	await vai(tor.to_global(Vector3(2.0, 0, -5.0)), 1.0, 20)
+	await vai(tor.to_global(Vector3(-4.6, 0, -4.2)), 1.0, 20)
+	await vai(tor.to_global(Vector3(-4.4, 0, -0.6)), 0.8, 20, false)
 	await vai(tor.to_global(Vector3(-3.1, 0, -0.6)), 0.5, 20, false)
 	await usa("portao", false)
 	await seg(1.8)
 	await sobe(tor)
-	diz("topo da torre y=%.1f (piso %.1f) na_torre=%s" % [j.global_position.y, tor.global_position.y + Locais.H_TORRE, pr.his._na_torre])
+	diz("topo da torre na_torre=%s" % pr.his._na_torre)
+	await usa("rifle", false)
+	await usa("municao", false)
+	await vai(tor.to_global(Vector3(0.4, Locais.H_TORRE, 1.2)), 0.5, 15, false)
 	await usa("livro")
 	await usa("radio")
-	await ate(func(): return j.so_olhar, 5, "radio comecar")
-	await ate(func(): return not j.so_olhar, 90, "conversa do radio")
-	diz("radio terminou, escondendo")
-	await vai(tor.to_global(Vector3(1.0, Locais.H_TORRE, 0.9)), 0.4, 20, false)
-	agacha = true
-	await vai(tor.to_global(Vector3(1.9, Locais.H_TORRE, 1.7)), 0.45, 20, false)
-	agacha = false
-	j.robo = {"agachar": true}
-	await seg(1.0)
-	diz("esconderijo=%s agachado=%s" % [j.esconderijo, j.agachado])
-	await ate(func(): return Jogo.etapa >= 6 or j.morto, 90, "criatura na torre")
-	diz("sobreviveu a torre")
-	j.robo = {}
-	await seg(1.0)
-	await desce(tor)
-	for q in Mundo.ESTRADA.slice(1, 8):
-		await vai(xz(q[0], q[1]), 3.0)
-	diz("chegou a ponte")
-	await vai(xz(303, 268), 2.0)
-	await vai(xz(296, 284), 2.0)
-	await vai(xz(288, 300), 2.5)
-	diz("atravessou a ponte")
-	for q in Mundo.ESTRADA.slice(8):
-		await vai(xz(q[0], q[1]), 3.0)
-	await vai(xz(262, 399), 2.0)
-	await ate(func(): return Jogo.etapa >= 8, 6, "rodovia")
-	diz("rodovia")
-	await vai(xz(300, 398), 2.5, 60, false)
-	await vai(xz(322, 396.8), 2.5, 60, false)
-	await ate(func(): return Jogo.flags.get("parou", false), 40, "caminhonete parar")
-	diz("caminhonete parou em x=%.0f" % loc.caminhonete.global_position.x)
-	if Teste.a.get("final", "bom") == "carona":
-		await ate(func(): return loc.it["carona"].ativo, 10, "motorista")
-		await usa("carona")
+	await ate(func(): return Jogo.etapa == 7, 90, "radio")
+	diz("chamou ajuda; itens=" + str(Jogo.itens))
+
+
+func _cerco() -> void:
+	var tor: Node3D = loc.nos["torre"]
+	if Teste.a.has("morte"):
+		pr.dir.t_ataque = 2.0
+		await ate(func(): return Jogo.mortes > 0, 260, "tres golpes")
+		diz("morreu com danos=%d" % j.danos)
+		await ate(func(): return not j.morto and not j.travado and Jogo.etapa == 7, 60, "renascer")
+		diz("renasceu em %s etapa=%d danos=%d" % [j.global_position, Jogo.etapa, j.danos])
+		Teste.a.erase("morte")
+	if Teste.a.has("espera"):
+		await ate(func():
+			j.danos = 0
+			return Jogo.etapa >= 8, 330, "amanhecer sem matar")
+		diz("sobreviveu sem matar")
 	else:
-		await seg(10.0)
-		for x in [345, 370, 395, 412]:
-			await vai(xz(x, 393 + (395 - x) * 0.04), 3.0)
-	await ate(func(): return pr.fase == "final", 30, "tela final")
-	diz("TERMINOU falhas=%d tempo_de_jogo=%.1f min mortes=%d" % [falhas, Jogo.tempo / 60.0, Jogo.mortes])
-	if Teste.a.has("foto"):
-		await seg(1.0)
-		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png(Teste.a.foto)
-	get_tree().quit()
-
-
-## dispara cada susto e confere a leitura protegida e a fisica
-func _anomalias() -> void:
-	var an: Anomalias = Jogo.anomalias
-	if Teste.a.anom != "2": await vai(xz(-289, -272), 2.0)
-	j.lanterna.ligada = true
-	Jogo.etapa = 3
-	for q in (["longe", "acena", "grupo", "corre", "passos", "sussurro", "galho", "lua", "poltrona", "costas", "apagao"] if Teste.a.anom != "2" else []):
-		an.t = 999.0
-		an.fazer(q)
-		await seg(3.0)
-		var n := 0
-		for v in an.ativos:
-			if is_instance_valid(v): n += 1
-		diz("anomalia %s: ativos=%d medo=%.2f lua=%.2f" % [q, n, j.medo, pr.fl.lua_fator])
-	# chega perto da poltrona / de quem esta de costas
-	for v in an.ativos.duplicate():
-		if is_instance_valid(v) and v.has_meta("cena"):
-			j.por_em(v.global_position + Vector3(2.5, 0.2, 2.5), 0.0)
-			await seg(4.0)
-	diz("depois de chegar perto: ativos=%d" % an.ativos.size())
-	# leitura protegida: a criatura congela
-	Jogo.etapa = 5
-	j.por_em(Mundo.chao(-289, -272), 0.0)
-	pr.cri.colocar(j.global_position + Vector3(9, 0, 0), j.global_position)
-	pr.cri.ultimo_visto = j.global_position
-	pr.cri.muda(Criatura.E.CACA)
-	pr.hud.abrir_nota("teste", "texto")
-	var p0: Vector3 = pr.cri.global_position
-	for k in 6:
-		await seg(0.5)
-		diz("   leitura: lendo=%s estado=%d andou=%.2f vis=%s" % [pr.hud.lendo, pr.cri.estado, pr.cri.global_position.distance_to(p0), pr.cri.visible])
-	diz("lendo com a criatura a 9 m: ela andou %.2f m, vida=%.0f" % [pr.cri.global_position.distance_to(p0), j.vida])
-	pr.hud.fechar_nota()
-	pr.cri.esconder()
-	# empurrar uma mala andando contra ela
-	var cont := 0
-	for m in pr.fl.locais.find_children("*", "RigidBody3D", true, false):
-		if not (m.nome in ["mala", "caixote", "poltrona", "lata"]) or cont >= 9: continue
-		cont += 1
-		var m0: Vector3 = m.global_position
-		j.por_em(m0 + Vector3(0.4, 0.3, 1.7), 0.0)
-		await seg(0.5)
-		j.robo = {"eixo": Vector2(0, -1)}
-		var tocou := {}
-		for k in 90:
-			var d: Vector3 = m.global_position - j.global_position
-			j.rotation.y = atan2(-d.x, -d.z)
+		var tiros := 0
+		var t := 0.0
+		while not pr.cri.morta and t < 400.0:
 			await get_tree().physics_frame
-			for c in j.get_slide_collision_count():
-				var col: Node = j.get_slide_collision(c).get_collider()
-				var nm: String = col.nome if col is ObjetoFisico else (str(col.get_parent().name) + "/" + col.get_class())
-				tocou["%s ny=%.1f" % [nm, j.get_slide_collision(c).get_normal().y]] = true
-		j.robo = {}
-		diz("empurrei %s (%.0f kg): moveu %.2f m, dist=%.2f tocou=%s" % [m.nome, m.mass, m.global_position.distance_to(m0), Vector2(m.global_position.x - j.global_position.x, m.global_position.z - j.global_position.z).length(), tocou.keys().slice(0, 5)])
-	diz("ANOMALIAS ok")
+			t += get_physics_process_delta_time()
+			j.danos = 0
+			var c: Criatura = pr.cri
+			if c.visible and c.estado in [Criatura.E.CACA, Criatura.E.TORRE]:
+				mira(c.altura_cabeca() - Vector3.UP * 0.35)
+				j.robo = {"foco": true}
+				if c.dist_jog() < 18.0 and j.rifle._t <= 0.0 and j.rifle._recarrega <= 0.0 and c.vidas > 0:
+					await get_tree().process_frame
+					var antes := c.vidas
+					j.rifle.atirar(j)
+					tiros += 1
+					diz("tiro %d a %.1f m: vidas %d -> %d" % [tiros, c.dist_jog(), antes, c.vidas])
+			else:
+				j.robo = {}
+				if j.rifle.pente < 3: j.rifle.recarregar()
+			if tiros == 1 and pr.his._na_torre and t > 60.0: t += 0.0
+		diz("matou=%s tiros=%d em %.0f s" % [pr.cri.morta, tiros, t])
+	await ate(func(): return Jogo.etapa == 8, 60, "etapa 8")
+	await ate(func(): return Jogo.flags.get("policia", false), 90, "policia")
+	diz("policia chegou hora=%.2f" % pr.fl.clima.hora)
+	if pr.his._na_torre or j.global_position.y > tor.global_position.y + 2.0:
+		await desce(tor)
+	await seg(3.0)
+	var pp: Vector3 = pr.his._vil_pol[0].global_position
+	await vai(Vector3(pp.x, 0, pp.z), 5.0, 60)
+	await ate(func(): return pr.fase == "final", 60, "tela final")
+	diz("TERMINOU falhas=%d tempo_de_jogo=%.1f min mortes=%d final=%s" % [falhas, Jogo.tempo / 60.0, Jogo.mortes, pr.menu._titulo.text])
 	get_tree().quit()
-
 
 func sobe(tor: Node3D) -> void:
 	await vai(tor.to_global(Vector3(-2.6, 0, -0.62)), 0.4, 20, false)

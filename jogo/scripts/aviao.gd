@@ -1,11 +1,12 @@
 class_name Aviao
 extends Node3D
-## Abertura: voo noturno, pane, turbulencia e queda.
+## Abertura: voo noturno, lanche, pane, turbulencia e queda.
+## Antes dos acontecimentos (pre) da para conversar, ler, acender a luz e escolher o lanche.
 
 signal caiu(protegido: bool)
 
 const ZI := -3.2          # onde a cabine comeca
-const LUZ := 0.55
+const LUZ := 0.85
 
 var cam: Camera3D
 var serv := {}
@@ -49,6 +50,24 @@ var _soltos: Array = []
 var _apag := 0.0
 var _estrobo := 0.0
 var dica := ""
+var acao_dica: Callable
+var pre := true
+var tp := 0.0                 # relogio da parte calma
+var ta := 0.0                 # relogio das animacoes
+var gente := {}
+var com: Gente
+var carrinho: Node3D
+var bandeja: Node3D
+var prato: Node3D
+var luz_minha: SpotLight3D
+var mordidas := 0
+var lanche := ""
+var alvos: Array = []         # {pos: Callable, txt, acao, vale: Callable}
+var _fala_viz := 0
+var _fase_com := 0
+var _t_fim := -1.0
+var luzes_rebatidas: Array = []
+var _tp_alvo := -1.0
 
 
 func construir() -> void:
@@ -67,7 +86,7 @@ func construir() -> void:
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.35, 0.42, 0.58)
-	env.ambient_light_energy = 0.07
+	env.ambient_light_energy = 0.11
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_exposure = 1.2
 	env.glow_enabled = true
@@ -173,41 +192,40 @@ func construir() -> void:
 	lpn.omni_range = 1.6
 	lpn.position = Vector3(0, 0.1, ZI - 0.85)
 	casco.add_child(lpn)
-	# gente
-	var cores := [[Color(0.20, 0.08, 0.07), Color(0.06, 0.06, 0.08), Color(0.05, 0.035, 0.02)], [Color(0.34, 0.32, 0.28), Color(0.10, 0.09, 0.07), Color(0.22, 0.20, 0.18)], [Color(0.08, 0.12, 0.20), Color(0.05, 0.06, 0.10), Color(0.10, 0.05, 0.02)], [Color(0.12, 0.16, 0.10), Color(0.12, 0.10, 0.08), Color(0.02, 0.016, 0.012)]]
-	var peles := [Color(0.50, 0.35, 0.28), Color(0.30, 0.19, 0.13), Color(0.56, 0.41, 0.33), Color(0.40, 0.27, 0.20)]
+	# gente: [fileira, banco, quem, pose]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 609
-	for q in [[0, 0], [0, 2], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2], [3, 0], [4, 0], [4, 2], [5, 1], [5, 0], [6, 2], [-1, 0], [-1, 1]]:
-		var h := MeshInstance3D.new()
-		h.mesh = load("res://dados/humano.res")
-		var m := ShaderMaterial.new()
-		m.shader = load("res://shaders/humano.gdshader")
-		var c: Array = cores[rng.randi() % 4]
-		m.set_shader_parameter("camisa", c[0] if q[0] >= 0 else Color(0.62, 0.62, 0.60))
-		m.set_shader_parameter("calca", c[1])
-		m.set_shader_parameter("cabelo", c[2])
-		m.set_shader_parameter("pele", peles[rng.randi() % 4])
-		h.material_override = m
-		if q[0] >= 0:
-			h.position = Vector3(Aeronave.BANCOS[q[1]], Aeronave.PISO + 0.44, ZI + (q[0] + 0.5) * 0.8 + 0.05)
-		else:
-			h.position = Vector3([-0.42, 0.42][q[1]], -0.36, ZI - 0.55)
-		h.rotation = Vector3(rng.randf_range(-0.06, 0.02), rng.randf_range(-0.14, 0.14), rng.randf_range(-0.06, 0.06))
-		h.scale = Vector3.ONE * rng.randf_range(0.93, 1.0)
-		casco.add_child(h)
+	for q in [[0, 0, "p03", "sentado"], [0, 2, "p08", "dorme"], [1, 1, "p05", "le"], [1, 2, "p01", "nervoso"], [2, 0, "p02", "le"], [2, 1, "p07", "conversa"], [2, 2, "p04", "dorme"], [3, 0, "p06", "dorme"], [3, 1, "viz", "sentado"], [4, 0, "p08", "sentado"], [5, 1, "p05", "dorme"], [-1, 0, "pil", "sentado"], [-1, 1, "p01", "sentado"]]:
+		var pp := Vector3(Aeronave.BANCOS[q[1]], Aeronave.PISO + 0.52, ZI + (q[0] + 0.5) * 0.8 - 0.02) if q[0] >= 0 else Vector3([-0.42, 0.42][q[1]], -0.30, ZI - 0.60)
+		var h := Gente.criar(casco, q[2], pp, rng.randf_range(-0.08, 0.08), true)
+		h.pose = q[3]
+		h.set_meta("pose0", q[3])
 		_passag.append(h)
+		if not gente.has(q[2]): gente[q[2]] = h
+		if q[3] == "le":
+			var rv := Malha.new()
+			for sx in [-1.0, 1.0]: rv.caixa(Transform3D(Basis.from_euler(Vector3(-0.95, 0.22 * sx, 0)), Vector3(0.085 * sx, 0.30, -0.36)), Vector3(0.17, 0.004, 0.24), 1.0)
+			rv.no(Mat.liso(Color(0.62, 0.58, 0.50), 0.4), h)
+	gente.p07.olhar = gente.p04
+	gente.p03.olhar = Vector3(-4, 0.2, -3.0)
 	# o seu corpo
-	var eu := MeshInstance3D.new()
-	eu.mesh = load("res://dados/humano_corpo.res")
-	var me := ShaderMaterial.new()
-	me.shader = load("res://shaders/humano.gdshader")
-	me.set_shader_parameter("camisa", Color(0.16, 0.11, 0.07))
-	me.set_shader_parameter("calca", Color(0.06, 0.08, 0.14))
-	me.set_shader_parameter("pele", Color(0.52, 0.37, 0.29))
-	eu.material_override = me
-	eu.position = Vector3(Aeronave.BANCOS[2], Aeronave.PISO + 0.44, ZI + 3.5 * 0.8 + 0.05)
-	casco.add_child(eu)
+	var eu := Gente.criar(casco, "p06", Vector3(Aeronave.BANCOS[2], Aeronave.PISO + 0.48, ZI + 3.5 * 0.8 + 0.07), 0.0, true)
+	eu.rosto.visible = false
+	var some := StandardMaterial3D.new()
+	some.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	some.alpha_scissor_threshold = 0.9
+	some.albedo_color = Color(0, 0, 0, 0)
+	for i in eu.d.sup_corpo.size():
+		if eu.d.sup_corpo[i] in ["cabelo", "olhos"]: eu.corpo.set_surface_override_material(i, some)
+	eu.corpo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for mm in eu.m_tec: mm.set_shader_parameter("corta", 1.27)
+	eu.m_pele[0].set_shader_parameter("corta", 1.27)
+	gente["eu"] = eu
+	# comissaria e carrinho
+	com = Gente.criar(casco, "com", Vector3(CORR, Aeronave.PISO, ZI + 0.25), PI, false)
+	com.visible = false
+	_faz_carrinho()
+	_faz_bandeja()
 	# luz da cabine: fraca, de madrugada
 	for i in 3:
 		var l := OmniLight3D.new()
@@ -235,6 +253,31 @@ func construir() -> void:
 	for k in serv.lampadas.size():
 		if k in [2, 4, 14, 16]:
 			serv.lampadas[k][0].material_override.emission_energy_multiplier = 6.0
+	luz_minha = SpotLight3D.new()
+	luz_minha.light_color = Color(1.0, 0.86, 0.62)
+	luz_minha.light_energy = 1.8
+	luz_minha.spot_range = 2.2
+	luz_minha.spot_angle = 22
+	luz_minha.light_volumetric_fog_energy = 1.2
+	luz_minha.shadow_enabled = true
+	luz_minha.position = Vector3(0.66, 0.84, ZI + 3.5 * 0.8 - 0.22)
+	luz_minha.rotation.x = -PI * 0.5
+	casco.add_child(luz_minha)
+	var reb := OmniLight3D.new()       # luz rebatida no encosto da frente
+	reb.light_color = Color(1.0, 0.82, 0.60)
+	reb.light_energy = 0.30
+	reb.omni_range = 1.3
+	reb.position = Vector3(0.30, 0.40, -0.80)
+	casco.add_child(reb)
+	luzes_rebatidas = [reb]
+	alvos = [
+		{"pos": func(): return gente.viz.cabeca(), "txt": "Conversar", "acao": _conversa_viz, "vale": func(): return tp > 24.0 and _fala_viz < 3 and _fase_com != 2},
+		{"pos": func(): return casco.to_global(Vector3(0.66, 0.02, -0.80)), "txt": "Ler a revista de bordo", "acao": _le_revista, "vale": func(): return tp > 18.0 and lanche == ""},
+		{"pos": func(): return casco.to_global(Vector3(0.66, 0.80, -0.62)), "txt": "Luz de leitura", "acao": func():
+			luz_minha.light_energy = 0.0 if luz_minha.light_energy > 0.1 else 2.4
+			Som.toca("radio_clique", -10, 1.5), "vale": func(): return true},
+		{"pos": func(): return casco.to_global(Vector3(0.64, -0.10, -0.74)), "txt": "Comer", "acao": _morde, "vale": func(): return lanche != "" and mordidas < 4 and _fase_com >= 3},
+	]
 	calha = serv.calha.mesh.surface_get_material(0)
 	luz_em = OmniLight3D.new()
 	luz_em.light_color = Color(1.0, 0.06, 0.03)
@@ -406,7 +449,7 @@ func construir() -> void:
 	cam.far = 3500
 	cam.environment = env
 	casco.add_child(cam)
-	cam.position = Vector3(0.66, 0.40, -0.36)
+	cam.position = Vector3(0.66, OLHO, -0.36)
 	yaw = -0.35
 
 
@@ -424,14 +467,208 @@ func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		yaw = clampf(yaw - e.relative.x * 0.0020 * Jogo.sens, -1.95, 1.95)
 		pitch = clampf(pitch - e.relative.y * 0.0020 * Jogo.sens, -0.95, 0.75)
-	if e.is_action_pressed("usar") and dica != "" and not cinto:
-		apertar_cinto()
+	if e.is_action_pressed("usar") and dica != "":
+		if acao_dica.is_valid(): acao_dica.call()
+		elif not cinto and t > 39.0: apertar_cinto()
 
 
 func apertar_cinto() -> void:
 	cinto = true
 	dica = ""
 	Som.toca("chave", -6, 0.8)
+
+
+const CORR := -0.215          # meio do corredor
+const OLHO := 0.50
+
+
+func _faz_carrinho() -> void:
+	carrinho = Node3D.new()
+	casco.add_child(carrinho)
+	var m := Malha.new()
+	m.cx(Vector3(0, 0.50, 0), Vector3(0.27, 0.86, 0.42))
+	m.cx(Vector3(0, 0.95, 0), Vector3(0.29, 0.03, 0.44))
+	m.no(Mat.liso(Color(0.42, 0.43, 0.45), 0.35, 0.7), carrinho)
+	var f := Malha.new()
+	f.cx(Vector3(0, 0.52, -0.212), Vector3(0.22, 0.70, 0.006))
+	f.no(Mat.liso(Color(0.05, 0.10, 0.20), 0.4), carrinho)
+	for k in 4:
+		var l := Malha.new()
+		var o := Vector3(-0.09 + 0.06 * k, 0.965, 0.12 - 0.02 * (k % 2))
+		l.tubo([o, o + Vector3(0, 0.12, 0)], [0.026, 0.026], 16, 1, 1, Color(0, 0, 0.5), true)
+		l.no(Mat.liso([Color(0.5, 0.05, 0.04), Color(0.06, 0.25, 0.10), Color(0.6, 0.5, 0.1), Color(0.7, 0.7, 0.72)][k], 0.3, 0.5), carrinho)
+	for k in 2:
+		var p := Node3D.new()
+		p.position = Vector3(-0.06 + 0.12 * k, 0.968, -0.08)
+		p.scale = Vector3.ONE * 0.85
+		carrinho.add_child(p)
+		Itens.lanche(p, "sanduiche" if k == 0 else "biscoito")
+	carrinho.visible = false
+
+
+## mesinha das costas da poltrona da frente
+func _faz_bandeja() -> void:
+	bandeja = Node3D.new()
+	casco.add_child(bandeja)
+	bandeja.position = Vector3(0.68, -0.145, -0.62)
+	var m := Malha.new()
+	m.cx(Vector3(0, 0, -0.06), Vector3(0.40, 0.018, 0.26))
+	m.no(Aeronave.m_forro(Color(0.44, 0.42, 0.38), 0.35, 0.0), bandeja)
+	var b := Malha.new()
+	for sx in [-1.0, 1.0]: b.viga(Vector3(0.17 * sx, -0.01, 0.0), Vector3(0.17 * sx, 0.02, -0.28), 0.014)
+	b.no(Mat.liso(Color(0.3, 0.3, 0.31), 0.4, 0.8), bandeja)
+	prato = Node3D.new()
+	bandeja.add_child(prato)
+	prato.position = Vector3(-0.02, 0.012, -0.05)
+	bandeja.visible = false
+
+
+func _conversa_viz() -> void:
+	var v: Gente = gente.viz
+	if t_fala > 0.0: return
+	_fala_viz += 1
+	v.olhar = cam
+	v.pose = "conversa"
+	match _fala_viz:
+		1:
+			v.dizer("v_viz2", "passageira ao lado", "Minha avó nasceu aí embaixo. Dizia que à noite essas montanhas chamam a gente pelo nome. Bobagem de gente velha.", 8.0)
+			t_fala = 8.2
+		2:
+			v.dizer("v_viz3", "passageira ao lado", "Vou ver minha neta nascer. Levo um casaquinho de lã na bolsa.", 5.0)
+			t_fala = 5.2
+		3:
+			v.dizer("v_viz4", "passageira ao lado", "Você dorme em avião? Eu nunca consegui.", 3.4)
+			t_fala = 3.6
+
+var t_fala := 0.0
+
+
+func _le_revista() -> void:
+	if Jogo.hud.lendo: return
+	Jogo.hud.abrir_nota("Revista de bordo — janeiro de 1987", "OS MONTES MAIS VELHOS DO MUNDO\n\nOs Apalaches já eram antigos quando os primeiros dinossauros apareceram. Debaixo da neve há vales que ninguém mapeou a pé.\n\nOs moradores têm uma regra curiosa: se ouvir alguém chamar o seu nome na mata, depois que escurece, não responda.\n\n\"Pode ser que não seja alguém\", explica um guia, rindo.\n\nO guia não quis ser fotografado.")
+
+
+func _morde() -> void:
+	mordidas += 1
+	Som.toca("comer", -5, randf_range(0.9, 1.1))
+	prato.scale = Vector3.ONE * (1.0 - mordidas * 0.2)
+	if mordidas >= 4:
+		prato.visible = false
+		Jogo.flags["comeu"] = true
+
+
+func _pre(dt: float) -> void:
+	tp += dt
+	t_fala -= dt
+	if _ump("cap", 1.5): Jogo.hud.capitulo("VOO 609", "24 de janeiro de 1987  —  1h52 da madrugada", 3.0)
+	if _ump("ch1", 5.5): Som.toca("av_chime", -8)
+	if _ump("p1", 7.0):
+		Som.toca("v_piloto1", -2, 1.0, "Voz")
+		Jogo.falar("comandante", "Boa noite, senhores passageiros. Aqui é a comandante.", 4.0)
+	if _ump("p1b", 11.2): Jogo.falar("comandante", "Estamos sobrevoando os montes Apalaches. Lua cheia do lado direito da aeronave. Pouso previsto em quarenta minutos.", 8.0)
+	if _ump("viz", 20.5):
+		gente.viz.olhar = cam
+		gente.viz.sorriso = 0.6
+		gente.viz.dizer("v_viz1", "passageira ao lado", "Primeira vez que voo à noite. A minha filha diz que a serra fica bonita com neve.", 5.5)
+		t_fala = 5.6
+	if _ump("vizj", 27.5): gente.viz.olhar = Vector3(6, -2, -2)
+	if _ump("dica1", 27.0): Jogo.aviso.emit("Mouse olhar  ·  E interagir")
+	# a comissaria vem servindo
+	if _ump("com", 54.0):
+		com.visible = true
+		carrinho.visible = true
+		com.pose = "bandeja"
+		com.sorriso = 0.35
+		com.ir([Vector3(CORR, Aeronave.PISO, ZI + 0.9)], 0.45, func(): _fase_com = 1)
+		Som.em("carrinho", com.global_position, -4.0, 8, 1.0, "Mundo", 1.5)
+	if _fase_com == 1 and _umpf("serve2", 2.0):
+		com.pose = "serve"
+		com.giro_alvo = -PI * 0.5
+		com.dizer("v_com0", "comissária", "Sanduíche ou biscoito? Aqui está.", 2.6)
+	if _fase_com == 1 and _umpf("vem", 5.5):
+		com.pose = "bandeja"
+		com.giro_alvo = null
+		Som.em("carrinho", com.global_position, -4.0, 8, 1.0, "Mundo", 1.5)
+		com.ir([Vector3(CORR, Aeronave.PISO, -0.98)], 0.5, func(): _chegou_com())
+	if carrinho.visible:
+		var fr := Vector3(0, 0, 1)
+		carrinho.position = carrinho.position.lerp(Vector3(CORR, Aeronave.PISO + 0.02, minf(com.position.z + 0.60, 2.7)), minf(1.0, dt * 9.0)) if carrinho.position != Vector3.ZERO else Vector3(CORR, Aeronave.PISO + 0.02, com.position.z + 0.60)
+	if _t_fim > 0.0 and tp > _t_fim:
+		pre = false
+		t = 22.0
+		com.visible = false
+		carrinho.visible = false
+		dica = ""
+		acao_dica = Callable()
+		return
+	# alvo do olhar
+	dica = ""
+	acao_dica = Callable()
+	if not Jogo.hud.lendo and _fase_com != 2:
+		var melhor := 0.90
+		for q in alvos:
+			if not q.vale.call(): continue
+			var d: Vector3 = (q.pos.call() as Vector3) - cam.global_position
+			var k := (-cam.global_transform.basis.z).dot(d.normalized())
+			if k > melhor:
+				melhor = k
+				dica = "[E] " + q.txt
+				acao_dica = q.acao
+
+
+func _ump(id: String, em: float) -> bool:
+	if tp >= em and not _feito.has("pre" + id):
+		_feito["pre" + id] = true
+		return true
+	return false
+
+var _tf1 := -1.0
+
+
+## uma vez, x segundos depois de a comissaria parar
+func _umpf(id: String, depois: float) -> bool:
+	if _tf1 < 0.0: _tf1 = tp
+	if tp - _tf1 >= depois and not _feito.has("pre" + id):
+		_feito["pre" + id] = true
+		return true
+	return false
+
+
+func _chegou_com() -> void:
+	_fase_com = 2
+	com.pose = "pe"
+	com.giro_alvo = -PI * 0.5 - 0.25
+	com.olhar = cam
+	gente.viz.olhar = com
+	gente.viz.pose = "sentado"
+	Jogo.hud._dica.text = ""
+	await get_tree().create_timer(0.9, false).timeout
+	com.dizer("v_com1", "comissária", "Boa noite. Hoje temos sanduíche de queijo ou biscoito com chocolate. O que você prefere?", 5.6)
+	await get_tree().create_timer(5.0 if not Teste.ativo else 0.5, false).timeout
+	var r: int = await Jogo.hud.escolha("O que você vai querer?", ["Sanduíche de queijo", "Biscoito com chocolate"])
+	if not is_inside_tree(): return
+	lanche = "sanduiche" if r == 0 else "biscoito"
+	Jogo.flags["lanche"] = lanche
+	com.pose = "serve"
+	com.sorriso = 0.8
+	com.dizer("v_com2" if r == 0 else "v_com3", "comissária", "Sanduíche. Ótima escolha. Bom apetite." if r == 0 else "Os biscoitos são os meus preferidos. Bom apetite.", 3.4)
+	await get_tree().create_timer(0.9, false).timeout
+	bandeja.visible = true
+	prato.visible = true
+	Itens.lanche(prato, lanche)
+	Som.toca("talher", -8)
+	await get_tree().create_timer(2.6, false).timeout
+	_fase_com = 3
+	com.pose = "bandeja"
+	com.olhar = null
+	com.sorriso = 0.2
+	com.giro_alvo = null
+	Som.em("carrinho", com.global_position, -4.0, 8, 1.0, "Mundo", 1.5)
+	com.ir([Vector3(CORR, Aeronave.PISO, 2.75)], 0.62, func(): com.visible = false)
+	gente.viz.olhar = cam
+	gente.viz.dizer("v_viz5", "passageira ao lado", "Eu peguei o biscoito. Se enjoar, a gente troca.", 3.6)
+	t_fala = 4.0
+	_t_fim = tp + (17.0 if not Teste.ativo else 3.0)
 
 
 func _uma(id: String, em: float) -> bool:
@@ -444,8 +681,13 @@ func _uma(id: String, em: float) -> bool:
 func _process(dt: float) -> void:
 	if not rodando:
 		return
-	t += dt
-	_roteiro(dt)
+	ta += dt
+	if pre:
+		_pre(dt)
+	else:
+		t += dt
+		acao_dica = Callable()
+		_roteiro(dt)
 	# mundo passa
 	_d.y -= vel * dt
 	m_chao.set_shader_parameter("desloc", _d)
@@ -458,7 +700,7 @@ func _process(dt: float) -> void:
 		asa[k].rotation.z += dt * (46.0 if t < 53.0 else maxf(0.0, 46.0 - (t - 53.0) * 9.0))
 	# turbulencia
 	turb = lerpf(turb, turb_alvo, minf(1.0, dt * 1.6))
-	var a := t
+	var a := ta
 	var sx := sin(a * 1.7) * 0.35 + sin(a * 7.3) * 0.3 + sin(a * 17.0) * 0.18 + sin(a * 31.0) * 0.12
 	var sy := sin(a * 2.3 + 1.0) * 0.35 + sin(a * 9.1) * 0.3 + sin(a * 21.0) * 0.2 + sin(a * 37.0) * 0.14
 	var sz := sin(a * 1.1 + 2.0) * 0.45 + sin(a * 5.7) * 0.25 + sin(a * 13.0) * 0.16
@@ -469,8 +711,8 @@ func _process(dt: float) -> void:
 		tempo_prot_max += dt
 		tempo_prot += dt * protegendo
 	var ch := Vector3(sin(a * 43.0), sin(a * 53.0), sin(a * 61.0)) * 0.012 * turb
-	cam.position = Vector3(0.66, 0.40 - 0.26 * protegendo, -0.36 - 0.18 * protegendo) + ch + Vector3(sx, sy, 0) * 0.018 * turb
-	cam.rotation = Vector3(pitch - 0.75 * protegendo * (1.0 - absf(pitch) * 0.3) + ch.y * 2.2 + sin(t * 0.9) * 0.004, yaw * (1.0 - 0.6 * protegendo) + ch.x * 2.0, ch.z * 2.4 - casco.rotation.z * 0.15)
+	cam.position = Vector3(0.66, OLHO - 0.26 * protegendo, -0.36 - 0.18 * protegendo) + ch + Vector3(sx, sy, 0) * 0.018 * turb
+	cam.rotation = Vector3(pitch - 0.75 * protegendo * (1.0 - absf(pitch) * 0.3) + ch.y * 2.2 + sin(ta * 0.9) * 0.004, yaw * (1.0 - 0.6 * protegendo) + ch.x * 2.0, ch.z * 2.4 - casco.rotation.z * 0.15)
 	# luzes
 	_apag -= dt
 	var liga := 1.0
@@ -481,6 +723,8 @@ func _process(dt: float) -> void:
 		luzes[i].light_energy = LUZ * liga
 	for s in leitura:
 		s.light_energy = 2.6 * liga
+	for r in luzes_rebatidas: r.light_energy = 0.30 * liga
+	if t > 45.0: luz_minha.light_energy = 1.8 * liga
 	calha.emission_energy_multiplier = 0.9 * liga
 	for k in [2, 4, 14, 16]:
 		if k < serv.lampadas.size():
@@ -499,9 +743,21 @@ func _process(dt: float) -> void:
 		var m: Node3D = mascaras[i]
 		if m.visible:
 			m.rotation = Vector3(sin(t * 4.0 + i) * 0.25 * turb + mergulho, 0, sin(t * 3.3 + i * 2.0) * 0.3 * turb)
-	for h in _passag.size():
-		_passag[h].rotation.z = sin(t * 5.0 + h * 1.7) * 0.07 * turb
-		_passag[h].rotation.x = sin(t * 6.1 + h * 2.3) * 0.05 * turb - (0.5 if t > 78.0 else 0.0) * minf(1.0, (t - 78.0))
+	for h in _passag:
+		h.agita = turb * 0.55
+		if pre: continue
+		if t > 72.5: h.pose = "impacto"
+		elif t > 43.0: h.pose = "agarra"
+		elif t > 26.0 and h.pose in ["le", "conversa", "sentado", "nervoso"]: h.olhar = orbe.global_position if orbe.visible else null
+		if t > 35.0 and h.pose == "dorme": h.pose = "sentado"
+		h.medo = move_toward(h.medo, 1.0 if t > 52.0 else (0.6 if t > 38.0 else 0.0), dt * 0.6)
+		h.sorriso = 0.0
+	gente.eu.agita = turb * 0.4
+	if t > 72.5 and protegendo > 0.3: gente.eu.pose = "impacto"
+	elif t > 44.0: gente.eu.pose = "agarra"
+	if bandeja.visible and t > 46.0:
+		prato.visible = false
+		bandeja.visible = false
 	if t > 66.0:
 		for s in _soltos:
 			s.n.visible = true
@@ -520,15 +776,11 @@ func _process(dt: float) -> void:
 
 
 func _roteiro(dt: float) -> void:
-	if _uma("cap", 1.5): Jogo.hud.capitulo("VOO 609", "24 de outubro de 1987  —  1h52 da madrugada", 3.0)
-	if _uma("ch1", 5.5): Som.toca("av_chime", -8)
-	if _uma("p1", 7.0):
-		Som.toca("v_piloto1", -2, 1.0, "Voz")
-		Jogo.falar("comandante", "Boa noite, senhores passageiros. Aqui é a comandante.", 4.0)
-	if _uma("p1b", 11.2): Jogo.falar("comandante", "Estamos sobrevoando os montes Apalaches. Lua cheia do lado direito da aeronave. Pouso previsto em quarenta minutos.", 8.0)
 	if _uma("orbe", 24.0):
 		orbe.visible = true
-	if _uma("olhe", 27.0): Jogo.falar("passageira da frente", "Que luz é aquela?", 3.0)
+	if _uma("olhe", 27.0):
+		gente.viz.dizer("v_viz6", "passageira ao lado", "Que luz é aquela?", 2.6)
+		gente.viz.olhar = orbe.global_position
 	if _uma("olhe2", 31.0): Jogo.falar("", "Uma luz acompanha o avião. Ela não pisca.", 3.6)
 	if _uma("b1", 35.0):
 		turb_alvo = 0.35

@@ -1,0 +1,34 @@
+﻿# id | voz | velocidade | tom | modo | texto
+v_com0|Maria|1.0|1.10|seca|Sanduíche ou biscoito? Aqui está.
+v_com1|Maria|0.95|1.10|seca|Boa noite. Hoje temos sanduíche de queijo ou biscoito com chocolate. O que você prefere?
+v_com2|Maria|0.98|1.10|seca|Sanduíche. Ótima escolha. Bom apetite.
+v_com3|Maria|0.98|1.10|seca|Os biscoitos são os meus preferidos. Bom apetite.
+v_viz1|Maria|0.86|0.88|seca|Primeira vez que voo à noite. A minha filha diz que a serra fica bonita com neve.
+v_viz2|Maria|0.84|0.88|seca|Minha avó nasceu aí embaixo. Dizia que à noite essas montanhas chamam a gente pelo nome. Bobagem de gente velha.
+v_viz3|Maria|0.86|0.88|seca|Vou ver minha neta nascer. Levo um casaquinho de lã na bolsa.
+v_viz4|Maria|0.88|0.88|seca|Você dorme em avião? Eu nunca consegui.
+v_viz5|Maria|0.88|0.88|seca|Eu peguei o biscoito. Se enjoar, a gente troca.
+v_viz6|Maria|0.95|0.90|seca|Que luz é aquela?
+v_caleb1|Daniel|0.98|0.84|gente|Parado aí. Você veio do avião? Nós ouvimos a queda de madrugada. Achei que não tinha sobrado ninguém.
+v_caleb2|Daniel|0.98|0.84|gente|A estrada fechou com a neve e o telefone morreu faz uma semana. Rádio, só na Torre 4, e ninguém sobe lá com o sol baixo.
+v_caleb3|Daniel|0.98|0.84|gente|Você não pode ficar do lado de fora depois que escurecer. Procure a Ruth, na casa grande, depois da fogueira. E fale com o velho Elias antes da noite.
+v_elias1|Daniel|0.80|0.74|gente|Chega perto do fogo. Você tem cara de quem ouviu alguém chamar, lá em cima.
+v_elias2|Daniel|0.80|0.74|gente|Estes montes são mais velhos que os ossos. Mais velhos que as árvores, mais velhos que o mar. Quando meus avós chegaram, já tinha alguma coisa morando aqui.
+v_elias3|Daniel|0.80|0.74|gente|Ela não tem voz. Então pega a dos outros. Quem vivia aqui antes de nós não dizia o nome dela depois do pôr do sol. Nós também não dizemos.
+v_elias4|Daniel|0.80|0.74|gente|Primeiro os pássaros vão embora. Depois os cachorros calam. Depois ela te chama, com a voz de alguém que você perdeu. Se você responde, ela sabe onde você está.
+v_elias5|Daniel|0.78|0.74|gente|Cinquenta e seis anos atrás caiu um avião do correio, nesta mesma noite. Ela veio buscar quem sobrou. E levou nove de nós junto. Reza para eu estar errado.
+v_hannah1|Maria|1.02|1.06|gente|Você é do avião? Meu Deus, que frio. Fica perto da fogueira.
+v_hannah2|Maria|0.98|1.06|gente|Hoje de manhã todos os pássaros voaram para o sul. Todos. Minha mãe dizia que isso só aconteceu uma vez.
+v_amos1|Daniel|0.92|0.92|gente|Guardo a gasolina aí dentro, para o gerador da torre. Se a luz da torre acender, a guarda florestal enxerga lá do vale.
+v_amos2|Daniel|0.88|0.92|gente|Mas hoje ninguém sobe. Hoje é dia vinte e quatro.
+v_ruth1|Maria|0.88|0.80|gente|Minha nossa, que frio você deve estar passando. Entra, entra. Tem sopa na mesa e uma cama no quarto. Aqui ninguém paga por abrigo.
+v_ruth2|Maria|0.82|0.80|gente|Quando o sol sumir, tranca a porta e não abre para ninguém. Nem se for a minha voz.
+v_ruth3|Maria|0.80|0.80|seca|Não responde. Não faz barulho.
+v_ruth4|Maria|1.25|0.86|gente|Ela entrou na vila! Corre para a torre, a leste, depois do cemitério! Chama ajuda no rádio! Vai! Vai!
+v_ruth5|Maria|0.75|0.80|mimica|Alex. Sou eu, Ruth. Me ajuda aqui dentro.
+v_radio1|Daniel|1.0|0.96|radio|Torre 4, aqui é a guarda florestal do condado. Estamos vendo a sua luz. Quem fala?
+v_radio2|Daniel|1.0|0.96|radio|Escuta. A polícia já está subindo, mas a estrada é só neve. Eles chegam ao amanhecer. Aguenta até lá.
+v_radio3|Daniel|1.0|0.96|radio|Pega o rifle do Walt. E não abre para ninguém.
+v_pol1|Daniel|1.08|0.88|gente|Polícia! Tem alguém aí em cima?
+v_pol2|Daniel|1.05|0.88|gente|Aqui! Achei uma pessoa viva!
+v_pol3|Maria|0.95|0.96|gente|Calma. Acabou. Você está a salvo. Vamos tirar você daqui.

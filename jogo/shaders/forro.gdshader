@@ -6,7 +6,7 @@ uniform float sujo = 0.35;
 uniform float emenda = 1.0;
 uniform float tecido = 0.0;
 varying vec3 op;
-float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float h2(vec2 p) { vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float ru(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
 float fbm(vec2 p) { return ru(p) * 0.5 + ru(p * 2.1 + 3.0) * 0.3 + ru(p * 4.7 + 9.0) * 0.2; }

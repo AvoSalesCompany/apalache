@@ -9,16 +9,18 @@ COMO JOGAR
   Espaço .............. pular / proteger a cabeça no avião
   E ................... usar, pegar e soltar objetos
   F ................... lanterna
-  Clique esquerdo ..... arremessar
-  Botão direito ....... focar a visão
+  Clique esquerdo ..... atirar / arremessar
+  Botão direito ....... mirar / focar a visão
   C ................... segurar a bússola
   H ................... usar curativo
   Q ................... gritar por socorro (pense bem)
-  Tab ................. caderno
+  Tab ................. mochila
+  M ................... mapa
+  2 / R ............... rifle / recarregar
   Esc ................. pausa
 
 DICAS
-  Use fones de ouvido. Se o mato calar, ele está perto.
+  Use fones de ouvido. Se o mato calar, ela está perto.
   Ficou lento? Esc > Opções > Qualidade: Baixa.
 
 Para desinstalar: Configurações do Windows > Aplicativos > HOLLER.

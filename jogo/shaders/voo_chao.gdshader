@@ -4,7 +4,7 @@ uniform vec2 desloc = vec2(0.0);
 uniform float rugosa = 1.0;
 varying vec3 wp;
 varying float alt;
-float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float h2(vec2 p) { vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float ru(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
 float serra(vec2 p) {
@@ -32,7 +32,8 @@ void fragment() {
 	float c0 = ru(wp.xz * 0.16) * 0.5 + ru(wp.xz * 0.37) * 0.35;
 	vec3 g = vec3(c0 - cx, 0.0, c0 - cz) * 2.6 * rugosa;
 	NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(g, 0.0)).xyz);
-	ALBEDO = mix(vec3(0.030, 0.040, 0.034), vec3(0.085, 0.092, 0.075), c);
+	float mata = smoothstep(0.34, 0.62, c + (ru(wp.xz * 0.011) - 0.5) * 0.7);
+	ALBEDO = mix(vec3(0.74, 0.80, 0.88), mix(vec3(0.045, 0.055, 0.060), vec3(0.46, 0.50, 0.55), smoothstep(0.55, 0.85, c)), mata);
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.15;
 }

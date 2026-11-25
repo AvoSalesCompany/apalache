@@ -58,7 +58,7 @@ func _ocupado() -> bool:
 	if j == null or j.morto or j.travado or j.so_olhar or Jogo.hud.lendo:
 		return true
 	var c = Jogo.criatura
-	return c != null and c.estado in [Criatura.E.CACA, Criatura.E.ATAQUE, Criatura.E.TORRE]
+	return c != null and c.estado in [Criatura.E.CACA, Criatura.E.ATAQUE, Criatura.E.TORRE, Criatura.E.MORTA]
 
 
 func _process(dt: float) -> void:
@@ -241,7 +241,7 @@ func _corre(j) -> void:
 		v.corpo.rotation.z = sin(s * 26.0) * 0.16
 		if passo <= 0.0:
 			passo = 0.13
-			Som.em("p_folha%d" % randi_range(1, 5), v.global_position, 6.0, 40, 0.8)
+			Som.em("p_neve%d" % randi_range(1, 5), v.global_position, 6.0, 40, 0.8)
 	if t_forte < 30.0:
 		Som.toca("stinger3", -14)
 	ativos.erase(v)
@@ -270,15 +270,8 @@ func _poltrona(j) -> void:
 	var d: Vector3 = j.global_position - r.global_position
 	r.rotation = Vector3(randf_range(-0.06, 0.06), atan2(d.x, d.z), randf_range(-0.08, 0.08))
 	Aeronave.poltrona_no(r, Vector3.ZERO)
-	var h := MeshInstance3D.new()
-	h.mesh = load("res://dados/humano.res")
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/humano.gdshader")
-	m.set_shader_parameter("camisa", Color(0.18, 0.16, 0.14))
-	m.set_shader_parameter("pele", Color(0.21, 0.195, 0.18))
-	h.material_override = m
-	h.position = Vector3(0, 0.44, 0.05)
-	r.add_child(h)
+	var h := Gente.criar(r, ["p01", "p04", "p06", "p08"][randi() % 4], Vector3(0, 0.50, 0.0), 0.0, true)
+	h.morrer(randi() % 50, 0.5, 0.2)
 	Som.em("av_chime", r.global_position + Vector3.UP, -4.0, 45, 0.7)
 	var espera := 0.0
 	while is_instance_valid(r) and espera < 60.0:
@@ -317,10 +310,10 @@ func _passos_atras(j) -> void:
 		var tras: Vector3 = j.global_position + j.global_transform.basis.z * 5.0
 		if v > 0.8:
 			andava = true
-			Som.em("p_folha%d" % randi_range(1, 5), tras, 1.0, 22, 0.82)
+			Som.em("p_neve%d" % randi_range(1, 5), tras, 1.0, 22, 0.82)
 		elif andava:
 			andava = false
-			Som.em("p_folha%d" % randi_range(1, 5), tras, 3.0, 22, 0.78)
+			Som.em("p_neve%d" % randi_range(1, 5), tras, 3.0, 22, 0.78)
 			j.medo = maxf(j.medo, 0.45)
 			dur -= 2.0
 
@@ -368,7 +361,7 @@ func susto(f: float) -> void:
 
 # ------------------------------------------------------------------ olhos na mata
 func _olhos_anda(dt: float, j) -> void:
-	var quantos: int = [0, 2, 6, 8, 9, 10, 12, 14, 6, 0][clampi(Jogo.etapa, 0, 9)]
+	var quantos: int = [0, 0, 0, 0, 0, 8, 11, 12, 0, 0][clampi(Jogo.etapa, 0, 9)]
 	if j.abrigado: quantos = 0
 	for i in _olhos.size():
 		var q: Dictionary = _olhos[i]
@@ -409,7 +402,7 @@ func _por_olho(q: Dictionary, j) -> void:
 		var a := randf() * TAU
 		var r := randf_range(17.0, 34.0)
 		var p: Vector3 = j.global_position + Vector3(cos(a) * r, 0, sin(a) * r)
-		if Mundo.dist(Mundo.RODOVIA, p.x, p.z) < 12.0 or not _livre(p):
+		if not _livre(p) or Vector2(p.x, p.z).distance_to(Mundo.VILA) < 34.0:
 			continue
 		q.n.global_position = Mundo.chao(p.x, p.z) + Vector3.UP * [0.45, 0.9, 1.5, 2.1][randi() % 4]
 		q.livre = true

@@ -8,6 +8,14 @@ var _t := randf() * 100.0
 var _p := Vector3.INF
 
 
+func _ready() -> void:
+	omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
+	set_meta("sombra", shadow_enabled)
+	distance_fade_enabled = true
+	distance_fade_begin = 60.0
+	distance_fade_shadow = 24.0
+
+
 func _process(dt: float) -> void:
 	_t += dt
 	if _p == Vector3.INF:

@@ -215,6 +215,28 @@ static func rododendro(semente: int, lod: int) -> ArrayMesh:
 	return m
 
 
+## montinho de neve
+static func montinho(semente: int) -> ArrayMesh:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = semente
+	var m := Malha.new()
+	var R := 5
+	var L := 14
+	var alt := rng.randf_range(0.16, 0.30)
+	for i in R + 1:
+		var f := float(i) / R
+		for k in L + 1:
+			var a := TAU * (k % L) / L
+			var r := f * (0.85 + 0.22 * sin(a * 2.0 + semente) + 0.10 * sin(a * 5.0 + semente * 2.0))
+			var y := alt * pow(cos(f * PI * 0.5), 1.3) + 0.02 * sin(a * 3.0 + f * 4.0) * (1.0 - f) - 0.05 * f
+			m.vert(Vector3(cos(a) * r, y, sin(a) * r), Vector3(cos(a) * alt * f * 1.3, 1.0, sin(a) * alt * f * 1.3).normalized(), Vector2(cos(a) * r, sin(a) * r) * 0.5, Vector3.RIGHT)
+	for i in R:
+		for k in L:
+			var a0 := i * (L + 1) + k
+			m.quad(a0, a0 + 1, a0 + L + 2, a0 + L + 1)
+	return m.malha(Mat.neve_lisa())
+
+
 static func capim(semente: int) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = semente
@@ -224,5 +246,5 @@ static func capim(semente: int) -> ArrayMesh:
 		var l := Vector3(cos(a), 0, sin(a))
 		fo.cartao(Vector3(rng.randf_range(-0.1, 0.1), -0.03, rng.randf_range(-0.1, 0.1)), (Vector3.UP + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))).normalized(), l, rng.randf_range(0.35, 0.6), 0.55, Vector3(0, -0.6, 0), 0.85, 1.4)
 	var m := ArrayMesh.new()
-	fo.aplicar(m, Mat.folha("fol_capim.png", Color(0.8, 0.8, 0.72), 0.5, 0.4))
+	fo.aplicar(m, Mat.folha("fol_capim.png", Color(0.95, 0.82, 0.62), 0.5, 0.4))
 	return m

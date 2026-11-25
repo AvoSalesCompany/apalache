@@ -130,7 +130,7 @@ func principal() -> void:
 	_botao("Novo jogo", func(): novo.emit())
 	_botao("Opções", func(): opcoes("menu"))
 	_botao("Sair", func(): get_tree().quit())
-	_rodape.text = "Use fones de ouvido.   v0.2"
+	_rodape.text = "Use fones de ouvido.   v0.3"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -144,7 +144,7 @@ func pausa() -> void:
 	_botao("Voltar ao jogo", func(): retomar.emit())
 	_botao("Opções", func(): opcoes("pausa"))
 	_botao("Menu principal", func(): voltar_menu.emit())
-	_rodape.text = "WASD andar   ·   Shift correr   ·   Ctrl agachar   ·   E usar   ·   Q gritar por socorro   ·   F lanterna   ·   C bússola   ·   Clique arremessar   ·   H curativo   ·   Tab caderno"
+	_rodape.text = "WASD andar   ·   Shift correr   ·   Ctrl agachar   ·   E usar   ·   Tab mochila   ·   M mapa   ·   F lanterna   ·   C bússola   ·   H curativo   ·   2 rifle   ·   R recarregar   ·   Clique atirar / arremessar   ·   Q gritar"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -208,13 +208,14 @@ func final(qual: String) -> void:
 	_fundo.color = Color(0, 0, 0, 1)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var m := int(Jogo.tempo / 60.0)
-	if qual == "civilizacao":
-		_titulo.text = "Civilização"
-		_sub.text = "Você chegou a Cold Holler às 5h40. Contaram dezoito poltronas vazias.\nNa manhã seguinte, o telefone do quarto tocou. Era a sua voz."
+	if qual == "matou":
+		_titulo.text = "Silêncio"
+		_sub.text = "A polícia seguiu o rastro de sangue na neve por onze quilômetros.\nEle termina numa árvore, na altura de três homens.\n\nNa manhã seguinte, o telefone do quarto tocou. Era a voz da Ruth."
 	else:
-		_titulo.text = "Carona"
-		_sub.text = "A caminhonete foi achada na ribanceira, sem motor desde 1959.\nO cinto do passageiro estava afivelado."
+		_titulo.text = "Amanhecer"
+		_sub.text = "Contaram dezoito corpos no avião. Nenhuma vila.\nNo mapa que estava na sua mochila, não há nada circulado.\n\nNa manhã seguinte, o telefone do quarto tocou. Era a sua voz."
 	_rodape.text = "Tempo: %d min    ·    Mortes: %d    ·    Vezes que você respondeu: %d" % [m, Jogo.mortes, Jogo.chamados]
+	_caixa.position.y = 470
 	_botao("Menu principal", func(): voltar_menu.emit())
 
 

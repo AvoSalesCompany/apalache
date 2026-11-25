@@ -4,7 +4,7 @@ render_mode blend_mix, depth_draw_never, cull_disabled, specular_schlick_ggx;
 uniform vec3 reflexo : source_color = vec3(0.50, 0.40, 0.26);
 uniform float forca = 1.0;
 uniform float rachado = 0.0;
-float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float h2(vec2 p) { vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float ru(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
 void fragment() {

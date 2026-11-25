@@ -17,11 +17,9 @@ var ar: Node3D
 var locais: Locais
 var foco := Vector3.ZERO          # de onde o streaming olha
 var pronta := false
-var lua_fator := 1.0
-var _lua_alvo := 1.0
-var _lua_t := 0.0
-const LUA_E := 0.40
-const RAIOS := 0.15
+var clima: Clima
+var mat_terreno: ShaderMaterial
+var vila: Vila
 
 var _malhas := []                 # tipo -> [lod0, lod1]
 var _rodo := []
@@ -57,15 +55,21 @@ func construir(passo: Callable) -> void:
 	_distribui()
 	await passo.call("Espalhando 30 mil arvores", 0.66)
 	_agua()
-	_rodovia()
 	_prepara_mato()
 	await passo.call("Enchendo o riacho", 0.74)
 	locais = Locais.new()
 	add_child(locais)
 	await locais.construir(self, passo)
+	vila = Vila.new()
+	add_child(vila)
+	await vila.construir(self, passo)
 	_nevoas()
 	_colisores()
 	ar = Fx.ar(self)
+	clima = Clima.new()
+	clima.fl = self
+	add_child(clima)
+	clima.por(2.8)
 	opcoes_mudaram()
 	add_to_group("opcoes")
 	pronta = true
@@ -121,7 +125,7 @@ func _luz_e_ceu() -> void:
 
 	lua = DirectionalLight3D.new()
 	lua.light_color = Color(0.60, 0.73, 1.0)
-	lua.light_energy = LUA_E
+	lua.light_energy = 0.13
 	lua.light_angular_distance = 0.5
 	lua.light_volumetric_fog_energy = 1.0
 	lua.shadow_enabled = true
@@ -157,27 +161,30 @@ func opcoes_mudaram() -> void:
 	var q := Jogo.qualidade
 	env.ssao_enabled = q >= 1
 	env.ssil_enabled = q >= 3
-	lua.directional_shadow_max_distance = [60.0, 85.0, 110.0, 140.0][q]
+	lua.directional_shadow_max_distance = [45.0, 62.0, 90.0, 110.0][q]
+	lua.shadow_blur = [1.0, 1.6, 1.8, 2.0][q]
 	lua.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if q == 0 else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 
 
 ## uma nuvem cobre a lua por alguns segundos: breu
 func cobrir_lua(s: float) -> void:
-	_lua_alvo = 0.04
-	_lua_t = s
-	if Jogo.jogador:
-		Jogo.falar("", "Uma nuvem cobre a lua.", 2.5)
+	clima.cobrir_lua(s)
 
 
 # ------------------------------------------------------------------ terreno
 func _terreno() -> void:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/terreno.gdshader")
+	mat_terreno = m
 	m.set_shader_parameter("splat", ImageTexture.create_from_image(load("res://dados/splat.res")))
-	for par in [["folha", "forest_leaves_02"], ["lama", "brown_mud_leaves_01"], ["mato", "forrest_ground_01"], ["rocha", "mossy_rock"], ["seixo", "river_small_rocks"], ["terra", "gravel_ground_01"]]:
+	for par in [["folha", "forest_leaves_02"], ["lama", "brown_mud_leaves_01"], ["rocha", "mossy_rock"], ["seixo", "river_small_rocks"], ["terra", "gravel_ground_01"]]:
 		m.set_shader_parameter(par[0] + "_c", Mat.tex(par[1] + "_cor.jpg"))
 		m.set_shader_parameter(par[0] + "_n", Mat.tex(par[1] + "_nor.jpg"))
 	m.set_shader_parameter("folha_a", Mat.tex("forest_leaves_02_arm.jpg"))
+	m.set_shader_parameter("neve_c", Mat.tex("snow_02_cor.jpg"))
+	m.set_shader_parameter("neve_n", Mat.tex("snow_02_nor.jpg"))
+	m.set_shader_parameter("pisada_c", Mat.tex("snow_floor_cor.jpg"))
+	m.set_shader_parameter("pisada_n", Mat.tex("snow_floor_nor.jpg"))
 	var h := Mundo.dados.alt
 	var N := Mundo.N
 	# normais de uma vez
@@ -342,7 +349,7 @@ func _peca(id: String, i: int) -> Array:
 	var maior := maxf(bb.size.x, bb.size.z)
 	var desejo: float = {"rock_moss_set_01": 1.5, "rock_moss_set_02": 1.6, "boulder_01": 2.2, "rock_09": 1.4, "dead_tree_trunk": 5.0, "dead_tree_trunk_02": 4.6, "tree_stump_01": 1.5, "tree_stump_02": 1.3, "root_cluster_01": 2.0}.get(id, maior)
 	var e := desejo / maior
-	return [q[0], t, e, bb.size.y * e * 0.16]
+	return [Mat.nevar(q[0], 0.95), t, e, bb.size.y * e * 0.16]
 
 
 func _mm(mesh: Mesh, buf: PackedFloat32Array, sombra: bool, fim: float = 0.0) -> MultiMeshInstance3D:
@@ -371,7 +378,9 @@ func _aplica_nivel(k: Vector2i, nv: int) -> void:
 		c.no.visible = nv == 2
 	if nv < 2:
 		for tp in c.arv:
-			_nos[k].append(_mm(_malhas[tp][nv], c.arv[tp], true))
+			var nn := _mm(_malhas[tp][nv], c.arv[tp], true)
+			nn.set_meta("nv", nv)
+			_nos[k].append(nn)
 		for tp in c.rod:
 			_nos[k].append(_mm(_rodo[tp][nv], c.rod[tp], nv == 0 or Jogo.qualidade >= 2))
 		for tp in c.ped:
@@ -415,18 +424,16 @@ func _prepara_mato() -> void:
 			t.origin = Vector3.ZERO
 			var bb: AABB = t * (q[0] as Mesh).get_aabb()
 			t.origin = -Vector3(bb.get_center().x, bb.position.y + bb.size.y * 0.02, bb.get_center().z)
-			out.append([q[0], t, alvo / maxf(maxf(bb.size.x, bb.size.z), bb.size.y)])
+			out.append([Mat.nevar(q[0], 0.8), t, alvo / maxf(maxf(bb.size.x, bb.size.z), bb.size.y)])
 		return out
 	# [variantes, prob, freq de ruido]
 	_mat_mato = [
-		[pega.call("fern_02", 0.95), 26, 0],
-		[pega.call("shrub_02", 0.9), 4, 1],
+		[pega.call("shrub_02", 0.9), 5, 1],
 		[pega.call("shrub_03", 0.8), 5, 1],
-		[pega.call("shrub_04", 0.8), 5, 2],
-		[pega.call("nettle_plant", 0.7), 5, 0],
-		[pega.call("weed_plant_02", 0.5), 5, 2],
+		[pega.call("shrub_04", 0.8), 6, 2],
 		[pega.call("dry_branches_medium_01", 1.6), 5, 3],
-		[[[Arvores.capim(1), Transform3D.IDENTITY, 1.0], [Arvores.capim(2), Transform3D.IDENTITY, 1.0]], 46, 2],
+		[[[Arvores.capim(1), Transform3D.IDENTITY, 1.0], [Arvores.capim(2), Transform3D.IDENTITY, 1.0]], 26, 2],
+		[[[Arvores.montinho(1), Transform3D.IDENTITY, 1.0], [Arvores.montinho(2), Transform3D.IDENTITY, 0.8], [Arvores.montinho(3), Transform3D.IDENTITY, 1.3]], 22, 0],
 	]
 
 
@@ -473,7 +480,7 @@ func _mato_celula(k: Vector2i) -> Array:
 			var n := _ruido.get_noise_2d(x * 0.7 + esp[2] * 300.0, z * 0.7) * 0.5 + 0.5
 			if rng.randf() > smoothstep(0.38, 0.72, n) * 1.3:
 				continue
-			if Mundo.dist(Mundo.RIO, x, z) < 2.8 or Mundo.dist(Mundo.RODOVIA, x, z) < 6.0 or Mundo.dist(Mundo.ESTRADA, x, z) < 2.6:
+			if Mundo.dist(Mundo.RIO, x, z) < 3.4 or Mundo.dist(Mundo.ESTRADA, x, z) < 2.6:
 				continue
 			if locais and locais.ocupado(x, z):
 				continue
@@ -493,7 +500,7 @@ func _mato_celula(k: Vector2i) -> Array:
 			bufs[vi] = buf
 		for vi in bufs.size():
 			if bufs[vi].size() > 0:
-				out.append(_mm(esp[0][vi][0], bufs[vi], Jogo.qualidade >= 2 and e != 7, RM + 4.0))
+				out.append(_mm(esp[0][vi][0], bufs[vi], Jogo.qualidade >= 2 and e < 4, RM + 4.0))
 	return out
 
 
@@ -524,34 +531,6 @@ func _agua() -> void:
 		Som.loop3d("amb_riacho", self, Vector3(pts[i][0], pts[i][2], pts[i][1]), -3.0, 52.0, 5.0)
 
 
-func _rodovia() -> void:
-	var m := Malha.new()
-	var pts := Mundo.suave(Mundo.RODOVIA, 40)
-	var ac := 0.0
-	for i in pts.size():
-		var a: Array = pts[maxi(i - 1, 0)]
-		var b: Array = pts[mini(i + 1, pts.size() - 1)]
-		var d := Vector3(b[0] - a[0], 0, b[1] - a[1]).normalized()
-		var l := Vector3(-d.z, 0, d.x)
-		var p := Vector3(pts[i][0], 0, pts[i][1])
-		if i > 0:
-			ac += p.distance_to(Vector3(pts[i - 1][0], 0, pts[i - 1][1]))
-		for q in 5:
-			var o := (q / 4.0 - 0.5) * 8.2
-			var w := p + l * o
-			w.y = Mundo.altura(w.x, w.z) + 0.10
-			m.vert(w, Vector3.UP, Vector2(q / 4.0, ac), l)
-		if i > 0:
-			var k := (i - 1) * 5
-			for q in 4:
-				m.quad(k + q, k + q + 5, k + q + 6, k + q + 1)
-	var mt := ShaderMaterial.new()
-	mt.shader = load("res://shaders/asfalto.gdshader")
-	mt.set_shader_parameter("cor", Mat.tex("asphalt_02_cor.jpg"))
-	mt.set_shader_parameter("nor", Mat.tex("asphalt_02_nor.jpg"))
-	m.no(mt, self, false)
-
-
 func _nevoas() -> void:
 	var sh := ShaderMaterial.new()
 	sh.shader = load("res://shaders/nevoa.gdshader")
@@ -563,7 +542,7 @@ func _nevoas() -> void:
 		f.material = sh
 		f.position = Vector3(pts[i][0], pts[i][2] + 2.2, pts[i][1])
 		add_child(f)
-	for q in [Mundo.CEMITERIO, Mundo.CABANA + Vector2(10, 14), Mundo.QUEDA, Vector2(300, 165), Vector2(330, 398), Vector2(245, 60)]:
+	for q in [Mundo.CEMITERIO, Mundo.QUEDA, Vector2(110, -84), Vector2(-20, -60), Vector2(245, 60)]:
 		var f := FogVolume.new()
 		f.size = Vector3(44, 6, 44)
 		f.material = sh
@@ -660,19 +639,7 @@ func _process(dt: float) -> void:
 	if cam == null:
 		return
 	foco = cam.global_position
-	# no alto da torre a neblina fica embaixo e a vista abre
-	var alto := smoothstep(5.0, 13.0, foco.y - Mundo.altura(foco.x, foco.z))
-	env.fog_density = lerpf(0.0075, 0.0026, alto)
-	env.fog_light_energy = lerpf(0.055, 0.05, alto) * lerpf(0.35, 1.0, lua_fator)
-	# nuvem na frente da lua
-	_lua_t -= dt
-	if _lua_t <= 0.0: _lua_alvo = 1.0
-	lua_fator = move_toward(lua_fator, _lua_alvo, dt * (0.40 if _lua_alvo < lua_fator else 0.16))
-	lua.light_energy = LUA_E * lua_fator
-	mat_raios.set_shader_parameter("forca", RAIOS * lua_fator)
-	mat_ceu.set_shader_parameter("brilho", lerpf(0.06, 0.42, lua_fator))
-	env.ambient_light_energy = lerpf(0.022, 0.060, lua_fator)
-	env.volumetric_fog_density = lerpf(0.016, 0.0035, alto)
+	clima.atualiza(dt)
 	ar.global_position = foco
 	_t -= dt
 	if _t <= 0.0:

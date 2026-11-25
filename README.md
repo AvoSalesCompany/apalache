@@ -2,9 +2,9 @@
 
 Terror e sobrevivência em primeira pessoa para PC, feito em Godot 4.7.
 
-Outubro de 1987. O voo 609 cai de madrugada no meio dos montes Apalaches. As poltronas
-estão vazias, os cintos continuam afivelados e alguma coisa na mata já sabe o seu nome.
-A lua mal entra na mata e a lanterna não dura para sempre. Ache a civilização.
+Janeiro de 1987. O voo 609 cai de madrugada nos montes Apalaches, cobertos de neve.
+Você acorda com o sol nascendo, entre os mortos. Há uma vila circulada no mapa: chegue lá
+antes de escurecer. E, se ouvir alguém chamar o seu nome na mata, não responda.
 
 <p align="center">
   <a href="https://github.com/AvoSalesCompany/apalache/releases/latest/download/HOLLER-Instalador.exe">
@@ -20,7 +20,8 @@ A lua mal entra na mata e a lanterna não dura para sempre. Ache a civilização
 | | |
 |---|---|
 | ![Cabine do voo 609](docs/cabine.jpg) | ![Destroços](docs/destrocos.jpg) |
-| ![Um dos dezoito](docs/vigia.jpg) | ![Riacho](docs/riacho.jpg) |
+| ![Trilha](docs/trilha.jpg) | ![Vila de Cold Holler](docs/vila.jpg) |
+| ![O ataque](docs/ataque.jpg) | ![Torre 4](docs/torre.jpg) |
 
 ## Como jogar
 
@@ -42,27 +43,31 @@ Precisa de placa de vídeo com Vulkan. Ficou lento? *Esc → Opções → Qualid
 | WASD / mouse | andar / olhar |
 | Shift / Ctrl / Espaço | correr / agachar / pular e proteger a cabeça no avião |
 | E | usar, pegar e soltar objetos (algumas coisas pedem segurar) |
+| Tab ou I | mochila (inventário com ícones) |
+| M | mapa |
 | F | lanterna |
+| 2 / R | empunhar o rifle / recarregar |
 | Q | gritar por socorro (pense bem) |
 | C | segurar a bússola |
-| Clique esquerdo | arremessar pedra ou objeto para distrair |
-| Botão direito | focar a visão |
-| H / Tab / Esc | curativo / caderno / pausa |
+| Clique esquerdo | atirar, ou arremessar objeto |
+| Botão direito | mirar / focar a visão |
+| H / Esc | curativo / pausa |
 
-Jogue com fones de ouvido: **os grilos são o seu radar.** Se o mato calar, ele está perto.
+Jogue com fones de ouvido. Se o mato calar, ela está perto.
 
-## O que já existe (v0.2)
+## O que já existe (v0.3)
 
-- **Abertura:** turboélice regional dos anos 80 com janelas ovais, voo noturno, pane, turbulência e queda.
-- **Lanterna** com pilhas que acabam e que falha quando algo está perto. A luz também mostra você.
-- **Os dezoito:** passageiros parados na mata, de longe, olhando. Olhos que devolvem a luz, vultos, sustos.
-- **Começo seguro:** até sair da cabana a criatura só observa, e ler nunca é interrompido.
-- **Física:** tudo que é sólido tem colisão; malas, caixas, cadeiras e latas podem ser empurradas, pegas e jogadas.
-- **Mapa aberto** de 1 km²: 32 mil árvores, riacho, cabana, cemitério, torre de incêndio, ponte, rodovia e posto.
-- **O Chamador:** criatura com visão, audição e memória, que imita a voz de quem morreu.
-- **Diretor de tensão:** um segundo cérebro decide quando apertar e quando dar descanso.
-- **Sobrevivência:** frio, fôlego, ferimentos, medo e exposição ao luar (ícone da lua).
-- **As regras da serra** são mecânicas: não grite, não responda, não siga as luzes, cale quando o mato calar.
+- **Voo 609:** passageiros com rosto, pele, cabelo e gestos; vizinha de poltrona para conversar, revista, luz de
+  leitura e a comissária servindo o lanche (você escolhe) antes de tudo dar errado.
+- **Inverno:** neve no chão, nas árvores, nos telhados e caindo; pegadas, bafo no ar, riacho com gelo nas margens.
+- **Dia e noite:** o sol nasce nos destroços, se põe na vila, e só volta a nascer quando a polícia chega.
+- **Destroços:** quem não sobreviveu, mochila com mapa, casaco, curativos, bússola, lanterna.
+- **Mochila e mapa:** inventário com ícones, descrição, notas lidas e a sua posição no mapa.
+- **De dia nada ataca.** Só bandos de pássaros fugindo, altos, todos para o mesmo lado.
+- **Cold Holler:** vila com cinco moradores que falam, contam a história dos montes e dão abrigo.
+- **O ataque:** no meio da noite a vila é invadida. Corra para a Torre 4.
+- **Torre 4:** trancada, sem energia. A chave está onde ninguém queria; a gasolina ficou na vila destruída.
+- **O cerco:** depois de chamar ajuda, ela pode matar. Três golpes matam você. Três tiros matam ela.
 - **Dois finais**, salvamento automático, opções de qualidade e legendas em português.
 
 ## Organização
@@ -85,14 +90,21 @@ docs/            design, pesquisa e imagens
 | Quero mudar... | Arquivo |
 |---|---|
 | Roteiro, notas, finais | `jogo/scripts/historia.gd` |
-| Ritmo do terror, vozes, luzes falsas | `jogo/scripts/diretor.gd` |
+| Falas (texto, voz e velocidade) | `ferramentas/falas.txt`, depois `gerar_audio2.ps1 -SoVozes` |
+| Ritmo do terror e ondas do cerco | `jogo/scripts/diretor.gd` |
+| Pessoas: aparência | `jogo/ferr/gente_assar.gd` |
+| Pessoas: poses, rosto e gestos | `jogo/scripts/gente.gd` |
+| Vila: casas, interior, moradores, ruína | `jogo/scripts/vila.gd` |
+| Sol, lua, neblina e neve | `jogo/scripts/clima.gd` |
+| Itens e ícones / mochila e mapa | `jogo/scripts/itens.gd` / `inventario.gd` |
+| Rifle | `jogo/scripts/rifle.gd` |
 | Comportamento da criatura | `jogo/scripts/criatura.gd` |
 | Vigias, vultos e sustos | `jogo/scripts/anomalias.gd` e `vigia.gd` |
 | Lanterna | `jogo/scripts/lanterna.gd` |
 | Modelo do avião | `jogo/scripts/aeronave.gd` |
 | Objetos com física | `jogo/scripts/objeto_fisico.gd` |
 | Andar, frio, fôlego | `jogo/scripts/jogador.gd` |
-| Luz da lua e neblina | `jogo/scripts/floresta.gd`, função `_luz_e_ceu` |
+
 | Posição dos lugares, rio e estradas | `jogo/scripts/mundo.gd`, depois rodar a ferramenta abaixo |
 | Cena do avião | `jogo/scripts/aviao.gd` |
 
@@ -110,11 +122,17 @@ Robô que joga a partida inteira e relata onde travou:
 godot --path jogo -- robo=1 vel=3
 ```
 
+Refazer as pessoas (precisa dos dados CC0 do MakeHuman baixados numa pasta):
+
+```bash
+godot --path jogo --headless res://ferr/assar.tscn -- gente mh=C:/pasta
+```
+
 Publicar uma versão nova (o GitHub monta o instalador e atualiza o botão de download sozinho):
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 Exportar o `.exe` no seu PC: no Godot, *Editor → Gerenciar modelos de exportação*, depois *Projeto → Exportar → Windows*.

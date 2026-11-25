@@ -6,16 +6,31 @@ extends Node
 func _ready() -> void:
 	var a := OS.get_cmdline_user_args()
 	if a.is_empty():
-		a = PackedStringArray(["mundo", "criatura", "humano", "poltrona", "vigia", "impostor"])
+		a = PackedStringArray(["mundo", "criatura", "poltrona", "vigia", "mochila", "mapa", "impostor", "icones"])
 	for q in a:
+		if q.contains("="): continue
 		var t0 := Time.get_ticks_msec()
 		match q:
 			"mundo": _mundo()
 			"criatura": _criatura()
-			"humano": _humano()
 			"poltrona": _poltrona()
 			"vigia": _vigia()
 			"impostor": await _impostor()
+			"mochila": _mochila()
+			"sonda":
+				Mundo.dados = load("res://dados/mundo.res")
+				for k in 26:
+					var pp := Vector2(-131.0, -78.8).lerp(Vector2(-104.0, -95.4), k / 25.0)
+					print("sonda %.1f,%.1f h=%.2f rio=%.2f d=%.1f" % [pp.x, pp.y, Mundo.altura(pp.x, pp.y), lerpf(Mundo.RIO[5][2], Mundo.RIO[6][2], 0.2), Mundo.dist(Mundo.RIO, pp.x, pp.y)])
+			"mapa": _mapa()
+			"icones": await _icones()
+			"gente":
+				var pasta := ""
+				var so := PackedStringArray()
+				for k in a:
+					if k.begins_with("mh="): pasta = k.substr(3).uri_decode()
+					if k.begins_with("so="): so = k.substr(3).split("+")
+				GenteAssar.new().rodar(pasta, so)
 		print("assado: ", q, " em ", (Time.get_ticks_msec() - t0) / 1000.0, " s")
 	get_tree().quit()
 
@@ -41,7 +56,7 @@ func _mundo() -> void:
 	var tri := []
 	for q in Mundo.TRILHAS:
 		tri.append(Mundo.suave(q, 2))
-	var skid := [[-440, -350], [-368, -302]]
+	var skid := [[-440, -350], [-357, -294.7]]
 	var n1 := _ruido(7, 0.0052, 5)
 	var n2 := _ruido(19, 0.028, 4)
 	var n3 := _ruido(31, 0.13, 3)
@@ -99,7 +114,7 @@ func _mundo() -> void:
 		if iz % 64 == 0:
 			print("terreno ", iz, "/", N)
 	# achata os lugares
-	var locais := [[Mundo.CABANA, 8.0, 18.0], [Mundo.CEMITERIO, 10.0, 22.0], [Mundo.TORRE, 10.0, 52.0], [Mundo.POSTO, 17.0, 40.0], [Mundo.QUEDA, 7.0, 22.0]]
+	var locais := [[Mundo.VILA, 33.0, 68.0], [Mundo.CEMITERIO, 10.0, 22.0], [Mundo.TORRE, 15.0, 54.0], [Mundo.QUEDA, 7.0, 22.0]]
 	for L in locais:
 		var c: Vector2 = L[0]
 		var s := 0.0
@@ -110,8 +125,6 @@ func _mundo() -> void:
 					s += alt[iz * N + ix]
 					cnt += 1
 		s /= cnt
-		if L[0] == Mundo.POSTO:
-			s = 17.2
 		if L[0] == Mundo.TORRE:
 			s = 127.3
 		for iz in N:
@@ -119,8 +132,7 @@ func _mundo() -> void:
 				var dd := Vector2(ix * 2.0 - 512.0 - c.x, iz * 2.0 - 512.0 - c.y).length()
 				if dd < L[2]:
 					var w := 1.0 - smoothstep(L[1], L[2], dd)
-					if L[0] == Mundo.POSTO:
-						w *= smoothstep(5.0, 9.0, dh[iz * N + ix])
+					w *= smoothstep(7.0, 26.0, dr[iz * N + ix])
 					alt[iz * N + ix] = lerpf(alt[iz * N + ix], s, w)
 	# trilhas com inclinacao suave
 	for q in tri:
@@ -176,7 +188,7 @@ func _mundo() -> void:
 	rng.seed = 4242
 	var nd := _ruido(71, 0.018, 3)
 	var nt := _ruido(83, 0.011, 2)
-	var sitios := [[Mundo.CABANA, 8.0], [Mundo.CEMITERIO, 11.0], [Mundo.TORRE, 9.5], [Mundo.POSTO, 27.0], [Mundo.QUEDA, 9.0], [Mundo.PLACA_REGRAS, 2.0]]
+	var sitios := [[Mundo.VILA, 37.0], [Mundo.CEMITERIO, 11.0], [Mundo.TORRE, 15.0], [Mundo.QUEDA, 9.5]]
 	var livre := func(x: float, z: float, folga: float) -> bool:
 		if am.call(dr, x, z) < 4.8 + folga * 2.0: return false
 		if am.call(de, x, z) < 3.0 + folga: return false
@@ -203,16 +215,16 @@ func _mundo() -> void:
 			var u := rng.randf()
 			if drio < 50.0 and drio > 9.0 and u < 0.26:
 				tp = 4
-			elif q > 0.28:
-				tp = 5 if rng.randf() < 0.75 else 4
-			elif q > 0.05:
+			elif q > 0.06:
+				tp = 5 if rng.randf() < 0.70 else 4
+			elif q > -0.08:
 				tp = 2
-			elif q > -0.15:
+			elif q > -0.24:
 				tp = 0
-			elif q > -0.32:
+			elif q > -0.40:
 				tp = 1
 			else:
-				tp = 3
+				tp = 4
 			var w := rng.randf()
 			if w < 0.045: tp = 6
 			elif w < 0.20: tp = 7
@@ -237,7 +249,7 @@ func _mundo() -> void:
 			var x := -500.0 + (a + rng.randf()) * 2.6
 			var z := -500.0 + (b + rng.randf()) * 2.6
 			var drio: float = am.call(dr, x, z)
-			var p := (ne.get_noise_2d(x, z) - 0.20) * 2.4 + 0.17 * (1.0 - smoothstep(8.0, 32.0, drio))
+			var p := (ne.get_noise_2d(x, z) - 0.24) * 2.2 + 0.12 * (1.0 - smoothstep(8.0, 32.0, drio))
 			if rng.randf() > p or not livre.call(x, z, 0.9):
 				continue
 			rd.append_array(PackedFloat32Array([x, Mundo.altura(x, z) - 0.05, z, rng.randf() * TAU, rng.randf_range(0.7, 1.35)]))
@@ -358,12 +370,6 @@ func _criatura() -> void:
 	ResourceSaver.save(Sdf.malha(d), "res://dados/criatura.res", ResourceSaver.FLAG_COMPRESS)
 
 
-# ---------------------------------------------------------------- passageiro sentado
-func _humano() -> void:
-	_humano_de(true, "res://dados/humano.res")
-	_humano_de(false, "res://dados/humano_corpo.res")
-
-
 # poltrona estofada (tecido)
 func _poltrona() -> void:
 	var s := Sdf.new()
@@ -444,34 +450,6 @@ func _vigia() -> void:
 		ResourceSaver.save(Sdf.malha(d), "res://dados/vigia%d.res" % modo, ResourceSaver.FLAG_COMPRESS)
 
 
-func _humano_de(cabeca: bool, arq: String) -> void:
-	var s := Sdf.new()
-	s.k = 0.05
-	var pele := Color(1, 0, 0)
-	var cam := Color(0, 1, 0)
-	var cal := Color(0, 0, 1)
-	var cab := Color(0, 0, 0)
-	s.cap(Vector3(0, 0.13, 0.02), Vector3(0, 0.34, 0.03), 0.145, 0.135, 0, cam)
-	s.cap(Vector3(0, 0.34, 0.03), Vector3(0, 0.54, 0.02), 0.14, 0.15, 0, cam)
-	s.cap(Vector3(-0.13, 0.57, 0.02), Vector3(0.13, 0.57, 0.02), 0.085, 0.085, 0, cam)
-	if cabeca:
-		s.cap(Vector3(0, 0.60, 0.02), Vector3(0, 0.71, -0.01), 0.055, 0.052, 0, pele)
-		s.cap(Vector3(0, 0.83, -0.01), Vector3(0, 0.78, -0.045), 0.092, 0.072, 0, pele)
-		s.cap(Vector3(0, 0.80, -0.11), Vector3(0, 0.785, -0.125), 0.014, 0.012, 0, pele)
-		s.cap(Vector3(0, 0.86, 0.012), Vector3(0, 0.80, 0.05), 0.092, 0.075, 0, cab)
-	for sx in [-1.0, 1.0]:
-		if cabeca: s.cap(Vector3(0.088 * sx, 0.80, 0.0), Vector3(0.094 * sx, 0.78, 0.0), 0.018, 0.015, 0, pele)
-		s.cap(Vector3(0.19 * sx, 0.56, 0.02), Vector3(0.235 * sx, 0.30, 0.03), 0.062, 0.05, 0, cam)
-		s.cap(Vector3(0.235 * sx, 0.30, 0.03), Vector3(0.13 * sx, 0.20, -0.22), 0.047, 0.036, 0, cam)
-		s.cap(Vector3(0.12 * sx, 0.195, -0.24), Vector3(0.07 * sx, 0.18, -0.31), 0.034, 0.026, 0, pele)
-		s.cap(Vector3(0.10 * sx, 0.09, -0.02), Vector3(0.12 * sx, 0.09, -0.42), 0.095, 0.068, 0, cal)
-		s.cap(Vector3(0.12 * sx, 0.09, -0.42), Vector3(0.12 * sx, -0.34, -0.40), 0.066, 0.044, 0, cal)
-		s.cap(Vector3(0.12 * sx, -0.38, -0.40), Vector3(0.13 * sx, -0.39, -0.54), 0.046, 0.036, 0, cab)
-	var d := s.gerar(AABB(Vector3(-0.36, -0.48, -0.66), Vector3(0.72, 1.5, 0.92)), 0.019)
-	print("humano vertices ", d.v.size())
-	ResourceSaver.save(Sdf.malha(d), arq, ResourceSaver.FLAG_COMPRESS)
-
-
 # ---------------------------------------------------------------- fotos das arvores distantes
 func _impostor() -> void:
 	var tam := Vector2i(256, 512)
@@ -513,3 +491,118 @@ func _impostor() -> void:
 		sv.queue_free()
 	atlas.fix_alpha_edges()
 	atlas.save_png("res://tex/impostores.png")
+
+
+func _mochila() -> void:
+	var s := Sdf.new()
+	s.k = 0.03
+	var c := Color(0, 1, 0)
+	s.caixa(Vector3(0, 0.19, 0), Vector3(0.145, 0.185, 0.085), 0.05, 0.0, 0, c)
+	s.caixa(Vector3(0, 0.375, -0.005), Vector3(0.140, 0.055, 0.095), 0.045, 0.08, 0, c)
+	s.caixa(Vector3(0, 0.135, -0.105), Vector3(0.105, 0.085, 0.045), 0.03, 0.0, 0, c)
+	for sx in [-1.0, 1.0]:
+		s.caixa(Vector3(0.155 * sx, 0.14, 0), Vector3(0.03, 0.085, 0.055), 0.025, 0.0, 0, c)
+	s.cap(Vector3(-0.15, 0.475, 0.02), Vector3(0.15, 0.475, 0.02), 0.045, 0.045, 0, c)
+	var d := s.gerar(AABB(Vector3(-0.24, -0.04, -0.2), Vector3(0.48, 0.6, 0.36)), 0.0085)
+	ResourceSaver.save(Sdf.malha(d), "res://dados/mochila.res", ResourceSaver.FLAG_COMPRESS)
+
+
+## mapa topografico impresso: relevo sombreado, curvas de nivel, rio, trilhas
+func _mapa() -> void:
+	Mundo.dados = load("res://dados/mundo.res")
+	var N := 1024
+	var im := Image.create(N, N, false, Image.FORMAT_RGB8)
+	var ru := _ruido(5, 0.02, 4)
+	var rf := _ruido(9, 0.3, 2)
+	for y in N:
+		for x in N:
+			var wx := x - 512.0 + 0.5
+			var wz := y - 512.0 + 0.5
+			var h := Mundo.altura(wx, wz)
+			var n := Mundo.normal(wx, wz)
+			var som := clampf(0.5 + (-n.x * 0.5 - n.z * 0.5) * 1.6, 0.0, 1.0)
+			var c := Color(0.80, 0.75, 0.60).lerp(Color(0.60, 0.66, 0.50), 0.45 + 0.3 * ru.get_noise_2d(x, y))
+			c = c.lerp(Color(0.86, 0.83, 0.74), clampf((h - 70.0) / 60.0, 0.0, 0.8))
+			c = c.darkened((1.0 - som) * 0.35)
+			var g := Vector2(Mundo.altura(wx + 1, wz) - h, Mundo.altura(wx, wz + 1) - h).length()
+			var f: float = fposmod(h, 5.0)
+			var dist: float = minf(f, 5.0 - f) / maxf(g, 0.02)
+			var forte: bool = int(roundf(h / 5.0)) % 5 == 0
+			if dist < (1.0 if forte else 0.6): c = c.lerp(Color(0.42, 0.28, 0.14), 0.7 if forte else 0.42)
+			var dr := Mundo.dist(Mundo.RIO, wx, wz)
+			if dr < 3.4: c = Color(0.24, 0.42, 0.58)
+			var de := Mundo.dist(Mundo.ESTRADA, wx, wz)
+			if de < 2.2: c = Color(0.55, 0.32, 0.18) if de > 1.2 else Color(0.88, 0.80, 0.62)
+			for q in Mundo.TRILHAS:
+				var pt := Mundo.perto(q, wx, wz)
+				if pt[0] < 1.3 and int((wx + wz * 1.7) / 5.0) % 2 == 0: c = Color(0.32, 0.10, 0.06)
+			c = c.lerp(Color(0.5, 0.42, 0.28), 0.10 + 0.10 * rf.get_noise_2d(x, y))
+			# dobras do papel
+			for dd in [256, 512, 768]:
+				var k := minf(absf(x - dd), absf(y - dd))
+				if k < 3.0: c = c.darkened(0.16 * (1.0 - k / 3.0))
+			im.set_pixel(x, y, c)
+	im.save_png("res://tex/mapa.png")
+
+
+func _icones() -> void:
+	for id in Itens.ORDEM:
+		var sv := SubViewport.new()
+		sv.size = Vector2i(384, 384)
+		sv.transparent_bg = true
+		sv.own_world_3d = true
+		sv.msaa_3d = Viewport.MSAA_8X
+		sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		add_child(sv)
+		var we := WorldEnvironment.new()
+		var env := Environment.new()
+		env.background_mode = Environment.BG_COLOR
+		env.background_color = Color(0, 0, 0, 0)
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.7, 0.75, 0.85)
+		env.ambient_light_energy = 0.45
+		we.environment = env
+		sv.add_child(we)
+		var l := DirectionalLight3D.new()
+		l.light_energy = 1.7
+		l.light_color = Color(1.0, 0.93, 0.82)
+		l.rotation = Vector3(-0.8, 0.7, 0)
+		sv.add_child(l)
+		var l2 := DirectionalLight3D.new()
+		l2.light_energy = 0.6
+		l2.light_color = Color(0.6, 0.75, 1.0)
+		l2.rotation = Vector3(-0.2, -2.2, 0)
+		sv.add_child(l2)
+		var r := Node3D.new()
+		sv.add_child(r)
+		Itens.modelo(r, id)
+		r.rotation.y = {"rifle": PI * 0.5 + 0.25, "gasolina": 0.6, "mochila": PI + 0.5, "jaqueta": PI + 0.25, "lanche": 0.5, "municao": 0.4}.get(id, 0.25)
+		var bb := AABB()
+		var pri := true
+		for m in r.find_children("*", "MeshInstance3D", true, false):
+			var b: AABB = m.global_transform * m.get_aabb()
+			bb = b if pri else bb.merge(b)
+			pri = false
+		var cam := Camera3D.new()
+		cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+		sv.add_child(cam)
+		var dir := Vector3(0, 0.45, 1.0).normalized()
+		if id == "rifle": dir = Vector3(0, 0.08, 1.0).normalized()
+		cam.size = maxf(bb.size.length() * (0.86 if id != "rifle" else 0.98), 0.05)
+		cam.position = bb.get_center() + dir * 5.0
+		cam.look_at(bb.get_center())
+		if id == "rifle": r.rotation.z = 0.0
+		cam.far = 12
+		cam.current = true
+		for k in 8: await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		var im := sv.get_texture().get_image()
+		im.convert(Image.FORMAT_RGBA8)
+		# enquadra
+		var ub := im.get_used_rect()
+		var lado := int(maxi(ub.size.x, ub.size.y) * 1.08)
+		var q := Image.create(lado, lado, false, Image.FORMAT_RGBA8)
+		q.blit_rect(im, ub, (Vector2i(lado, lado) - ub.size) / 2)
+		q.resize(192, 192, Image.INTERPOLATE_LANCZOS)
+		q.save_png("res://tex/ic_%s.png" % id)
+		sv.queue_free()

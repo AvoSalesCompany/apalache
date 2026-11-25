@@ -33,6 +33,12 @@ var _ind: Indicadores
 var _painel: Control
 var _p_tit: Label
 var _p_corpo: Label
+var inv: Inventario
+var _faixa: HBoxContainer
+var _faixa_s := {}
+var _faixa_t := 0.0
+var _ganhos: VBoxContainer
+var _esc_painel: Control
 var _leg_t := 0.0
 var _fila := []
 var _cor_preto: ColorRect
@@ -47,6 +53,9 @@ class Indicadores extends Control:
 	var esc := 0.0
 	var bat := 0.0
 	var tem_bat := false
+	var danos := -1
+	var tiros := -1
+	var reserva := 0
 	var a_luz := 0.0
 	var a_vida := 0.0
 	var a_frio := 0.0
@@ -79,6 +88,19 @@ class Indicadores extends Control:
 		_barra(Vector2(92, h - 66), 150, fol, Color(0.85, 0.85, 0.80), a_fol)
 		_barra(Vector2(92, h - 54), 150, vida, Color(0.70, 0.12, 0.10), a_vida)
 		_barra(Vector2(92, h - 42), 150, 1.0 - frio, Color(0.45, 0.68, 0.90), a_frio)
+		# golpes levados: tres riscos de garra
+		if danos >= 0:
+			for i in 3:
+				var o := Vector2(50 + i * 26, h - 150)
+				var cor := Color(0.72, 0.05, 0.04, 0.95) if i < danos else Color(0.8, 0.8, 0.78, 0.28)
+				draw_line(o, o + Vector2(12, -30), cor, 5.0 if i < danos else 2.0, true)
+		if tiros >= 0:
+			for i in 5:
+				var o := Vector2(size.x - 60 - i * 15, h - 128)
+				var cor := Color(0.86, 0.66, 0.30, 0.95) if i < tiros else Color(0.8, 0.8, 0.78, 0.22)
+				draw_rect(Rect2(o, Vector2(6, 22)), cor)
+				draw_colored_polygon(PackedVector2Array([o + Vector2(0, 0), o + Vector2(6, 0), o + Vector2(3, -8)]), cor)
+			draw_string(ThemeDB.fallback_font, Vector2(size.x - 196, h - 108), "+%d" % reserva, HORIZONTAL_ALIGNMENT_RIGHT, 50, 18, Color(0.85, 0.82, 0.74, 0.8))
 		if seg > 0.0:
 			draw_arc(size * 0.5, 16, -PI * 0.5, -PI * 0.5 + TAU * seg, 40, Color(0.95, 0.92, 0.82, 0.9), 2.4, true)
 	func _barra(p: Vector2, w: float, v: float, cor: Color, a: float) -> void:
@@ -142,6 +164,10 @@ func _ready() -> void:
 	_cap.modulate.a = 0
 	_cap2.modulate.a = 0
 	_faz_painel()
+	_faz_faixa()
+	inv = Inventario.new()
+	add_child(inv)
+	inv.montar(self)
 	Jogo.legenda.connect(_on_legenda)
 	Jogo.objetivo_mudou.connect(_on_obj)
 	Jogo.aviso.connect(_on_aviso)
@@ -218,6 +244,158 @@ func _faz_painel() -> void:
 	_ancora(d, 0.5, 0.93)
 
 
+# ------------------------------------------------------------------ icones na tela
+func _faz_faixa() -> void:
+	_faixa = HBoxContainer.new()
+	_faixa.anchor_left = 1.0
+	_faixa.anchor_right = 1.0
+	_faixa.anchor_top = 1.0
+	_faixa.anchor_bottom = 1.0
+	_faixa.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_faixa.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_faixa.offset_right = -40
+	_faixa.offset_bottom = -34
+	_faixa.add_theme_constant_override("separation", 6)
+	_faixa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_raiz.add_child(_faixa)
+	_ganhos = VBoxContainer.new()
+	_ganhos.anchor_left = 1.0
+	_ganhos.anchor_right = 1.0
+	_ganhos.anchor_top = 0.5
+	_ganhos.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_ganhos.offset_right = -44
+	_ganhos.offset_left = -360
+	_ganhos.alignment = BoxContainer.ALIGNMENT_END
+	_ganhos.add_theme_constant_override("separation", 10)
+	_ganhos.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_raiz.add_child(_ganhos)
+
+
+func _caixinha(tam: int) -> Panel:
+	var p := Panel.new()
+	p.custom_minimum_size = Vector2(tam, tam)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.055, 0.06, 0.55)
+	sb.border_color = Color(0.6, 0.58, 0.5, 0.25)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(3)
+	p.add_theme_stylebox_override("panel", sb)
+	return p
+
+
+func _icone_em(p: Control, id: String, m: int) -> TextureRect:
+	var im := TextureRect.new()
+	im.set_anchors_preset(Control.PRESET_FULL_RECT)
+	im.offset_left = m
+	im.offset_top = m
+	im.offset_right = -m
+	im.offset_bottom = -m
+	im.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	im.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	im.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	im.texture = Itens.icone(id)
+	p.add_child(im)
+	return im
+
+
+## aviso grande de item novo, com icone
+func mostrar_item(id: String, n: int = 1) -> void:
+	_faixa_t = 8.0
+	var h := HBoxContainer.new()
+	h.alignment = BoxContainer.ALIGNMENT_END
+	h.add_theme_constant_override("separation", 14)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var l := rotulo(24, f_titulo, Color(0.96, 0.92, 0.82), h)
+	l.text = Itens.INFO[id][0] + ("  ×%d" % n if n > 1 else "")
+	var p := _caixinha(78)
+	_icone_em(p, id, 6)
+	h.add_child(p)
+	_ganhos.add_child(h)
+	h.modulate.a = 0.0
+	var t := create_tween()
+	t.tween_property(h, "modulate:a", 1.0, 0.35)
+	t.tween_interval(3.2)
+	t.tween_property(h, "modulate:a", 0.0, 0.8)
+	t.tween_callback(h.queue_free)
+
+
+func _pinta_faixa(dt: float, ok: bool) -> void:
+	_faixa_t -= dt
+	for id in Itens.ORDEM:
+		var n := Jogo.tem(id)
+		if n > 0 and not _faixa_s.has(id):
+			var p := _caixinha(52)
+			_icone_em(p, id, 4)
+			var l := rotulo(14, f_texto, Color(0.95, 0.92, 0.82), p)
+			l.position = Vector2(20, 32)
+			l.size = Vector2(29, 18)
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			_faixa.add_child(p)
+			_faixa_s[id] = [p, l]
+		if _faixa_s.has(id):
+			_faixa_s[id][0].visible = n > 0
+			_faixa_s[id][1].text = str(n) if n > 1 else ""
+	_faixa.modulate.a = move_toward(_faixa.modulate.a, (1.0 if _faixa_t > 0.0 else 0.50) if ok else 0.0, dt * 1.5)
+
+
+## pergunta com opcoes [ [texto, icone], ... ] ; devolve o indice
+func escolha(titulo: String, ops: Array) -> int:
+	var pn := Control.new()
+	pn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(pn)
+	var tt := rotulo(26, f_titulo, Color(0.95, 0.92, 0.84), pn)
+	_ancora(tt, 0.5, 0.55)
+	tt.text = titulo
+	var cx := HBoxContainer.new()
+	cx.anchor_left = 0.5
+	cx.anchor_right = 0.5
+	cx.anchor_top = 0.605
+	cx.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	cx.alignment = BoxContainer.ALIGNMENT_CENTER
+	cx.add_theme_constant_override("separation", 26)
+	pn.add_child(cx)
+	var ps := []
+	for i in ops.size():
+		var p := _caixinha(190)
+		p.custom_minimum_size = Vector2(230, 170)
+		var l := rotulo(20, f_texto, Color(0.95, 0.93, 0.86), p)
+		l.text = "[%d]  %s" % [i + 1, ops[i]]
+		l.set_anchors_preset(Control.PRESET_FULL_RECT)
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		p.custom_minimum_size = Vector2(270, 92)
+		cx.add_child(p)
+		ps.append(p)
+	var d := rotulo(16, f_texto, Color(0.7, 0.7, 0.66), pn)
+	d.text = "A / D escolher    ·    E confirmar    ·    ou aperte 1 / 2"
+	_ancora(d, 0.5, 0.715)
+	var sel := 0
+	var t := 0.0
+	var r := -1
+	while r < 0:
+		await get_tree().process_frame
+		if not is_inside_tree(): return 0
+		t += get_process_delta_time()
+		for i in ps.size():
+			(ps[i].get_theme_stylebox("panel") as StyleBoxFlat).border_color = Color(0.9, 0.74, 0.42, 0.95) if i == sel else Color(0.6, 0.58, 0.5, 0.25)
+			(ps[i].get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Color(0.18, 0.16, 0.12, 0.8) if i == sel else Color(0.05, 0.055, 0.06, 0.6)
+		if Teste.ativo:
+			if t > 0.6: r = int(Teste.num("lanche", 0))
+			continue
+		if get_tree().paused: continue
+		if Input.is_action_just_pressed("esquerda"): sel = maxi(0, sel - 1)
+		if Input.is_action_just_pressed("direita"): sel = mini(ops.size() - 1, sel + 1)
+		if t > 0.3:
+			if Input.is_action_just_pressed("guardar"): r = 0
+			elif Input.is_action_just_pressed("arma") and ops.size() > 1: r = 1
+			elif Input.is_action_just_pressed("usar"): r = sel
+	pn.queue_free()
+	Som.toca("papel", -10, 1.3, "UI")
+	return r
+
+
 func abrir_nota(titulo: String, corpo: String) -> void:
 	_p_tit.text = titulo
 	_p_corpo.text = corpo
@@ -232,7 +410,7 @@ func fechar_nota() -> void:
 	_painel.visible = false
 	lendo = false
 	em_diario = false
-	if Jogo.jogador:
+	if Jogo.jogador and Jogo.jogador.is_visible_in_tree():
 		Jogo.jogador.travado = false
 	Som.toca("papel", -10, 1.2, "UI")
 	leitura_fechou.emit()
@@ -241,13 +419,21 @@ func fechar_nota() -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if Teste.ativo:
 		return
-	if lendo and not get_tree().paused:
+	if inv.visible and not get_tree().paused:
+		if e.is_action_pressed("diario") or e.is_action_pressed("pausa") or e.is_action_pressed("inventario"):
+			get_viewport().set_input_as_handled()
+			inv.fecha()
+		elif e.is_action_pressed("mapa"):
+			get_viewport().set_input_as_handled()
+			if inv.aba == "mapa": inv.fecha()
+			else: inv.mostra("mapa")
+	elif lendo and not get_tree().paused:
 		if e.is_action_pressed("usar") or e.is_action_pressed("diario") or e.is_action_pressed("pausa"):
 			get_viewport().set_input_as_handled()
 			fechar_nota()
-	elif e.is_action_pressed("diario") and Jogo.jogador and not Jogo.jogador.travado and not Jogo.jogador.morto and not get_tree().paused and Jogo.jogador.is_visible_in_tree():
+	elif (e.is_action_pressed("diario") or e.is_action_pressed("inventario") or e.is_action_pressed("mapa")) and Jogo.jogador and not Jogo.jogador.travado and not Jogo.jogador.morto and not get_tree().paused and Jogo.jogador.is_visible_in_tree():
 		get_viewport().set_input_as_handled()
-		abrir_diario()
+		inv.abre("mapa" if e.is_action_pressed("mapa") else "itens")
 
 
 func abrir_diario() -> void:
@@ -323,6 +509,7 @@ func limpar() -> void:
 	_obj_t = 0.0
 	_obj.modulate.a = 0
 	_painel.visible = false
+	if inv: inv.visible = false
 	lendo = false
 	dano = 0.0
 	tonto = 0.0
@@ -349,6 +536,7 @@ func _process(dt: float) -> void:
 	pos.set_shader_parameter("pulso", pulso)
 	var j = Jogo.jogador
 	var ok: bool = j != null and j.is_visible_in_tree() and not j.morto
+	_pinta_faixa(dt, ok and not lendo and Jogo.etapa > 0)
 	_mira.visible = ok and not lendo and not j.travado
 	_ind.visible = ok and not lendo
 	_dica.text = j.dica() if ok and not lendo else ""
@@ -366,6 +554,9 @@ func _process(dt: float) -> void:
 		_ind.esc = j.escondido
 		_ind.bat = j.lanterna.bateria / 100.0
 		_ind.tem_bat = j.lanterna.ligada
+		_ind.danos = j.danos if Jogo.etapa == 7 else -1
+		_ind.tiros = j.rifle.pente if j.rifle.na_mao and j.rifle.tem else -1
+		_ind.reserva = Jogo.tem("municao")
 		_ind.a_luz = move_toward(_ind.a_luz, 0.9 if not j.travado else 0.0, dt)
 		_ind.a_fol = move_toward(_ind.a_fol, 1.0 if j.folego < 99.0 else 0.0, dt * 2.0)
 		_ind.a_vida = move_toward(_ind.a_vida, 1.0 if j.vida < 99.0 else 0.0, dt)

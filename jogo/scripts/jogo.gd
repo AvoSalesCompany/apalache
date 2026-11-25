@@ -7,7 +7,7 @@ signal aviso(texto: String)
 signal nota(titulo: String, corpo: String)
 
 const CFG := "user://opcoes.cfg"
-const SAVE := "user://salvo.json"
+const SAVE := "user://salvo_v3.json"
 
 # ---- opcoes
 var qualidade := 1          # 0 baixa 1 media 2 alta 3 ultra
@@ -51,6 +51,7 @@ func _teclas() -> void:
 		"frente": [KEY_W, KEY_UP], "tras": [KEY_S, KEY_DOWN], "esquerda": [KEY_A, KEY_LEFT], "direita": [KEY_D, KEY_RIGHT],
 		"correr": [KEY_SHIFT], "agachar": [KEY_CTRL], "pular": [KEY_SPACE], "usar": [KEY_E], "gritar": [KEY_Q],
 		"bussola": [KEY_C], "diario": [KEY_TAB], "curar": [KEY_H], "pausa": [KEY_ESCAPE], "lanterna": [KEY_F],
+		"arma": [KEY_2], "guardar": [KEY_1], "recarregar": [KEY_R], "mapa": [KEY_M], "inventario": [KEY_I],
 	}
 	for a in t:
 		if not InputMap.has_action(a):
@@ -98,16 +99,16 @@ func aplicar_opcoes() -> void:
 	var vp := get_viewport()
 	if vp == null:
 		return
-	var esc: float = [0.55, 0.67, 0.77, 1.0][qualidade]
+	var esc: float = [0.55, 0.67, 0.77, 0.87][qualidade]
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
 	vp.scaling_3d_scale = esc
 	vp.fsr_sharpness = 0.35
 	vp.mesh_lod_threshold = [4.0, 3.0, 2.0, 1.0][qualidade]
-	RenderingServer.directional_shadow_atlas_set_size([2048, 3072, 4096, 4096][qualidade], true)
+	RenderingServer.directional_shadow_atlas_set_size([2048, 2048, 4096, 4096][qualidade], true)
 	RenderingServer.directional_soft_shadow_filter_set_quality([1, 2, 3, 4][qualidade])
 	RenderingServer.environment_set_volumetric_fog_volume_size([64, 80, 112, 160][qualidade], [64, 80, 112, 128][qualidade])
 	RenderingServer.environment_set_volumetric_fog_filter_active(true)
-	RenderingServer.environment_set_ssao_quality([0, 1, 2, 3][qualidade], qualidade < 3, 0.5, 2, 50, 300)
+	RenderingServer.environment_set_ssao_quality([0, 0, 1, 3][qualidade], qualidade < 3, 0.5, 2, 50, 300)
 	get_tree().call_group("opcoes", "opcoes_mudaram")
 
 

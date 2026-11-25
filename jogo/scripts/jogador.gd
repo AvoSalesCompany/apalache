@@ -51,6 +51,10 @@ var lanterna: Lanterna
 var carrega: ObjetoFisico = null
 var obj_alvo: ObjetoFisico = null
 var olhar_forcado := Vector3.INF
+var danos := 0            # golpes levados no cerco (3 = morte)
+var rifle: Rifle
+var _vapor: GPUParticles3D
+var _t_vapor := 1.0
 var robo := {}            # comandos do teste automatico
 var robotizado := false   # no teste, teclado e mouse reais sao ignorados
 
@@ -63,7 +67,7 @@ func _ready() -> void:
 	_col.shape = _cap
 	_col.position.y = 0.88
 	add_child(_col)
-	floor_max_angle = deg_to_rad(56)
+	floor_max_angle = deg_to_rad(60)
 	floor_snap_length = 0.45
 	cam = Camera3D.new()
 	cam.top_level = true
@@ -73,7 +77,40 @@ func _ready() -> void:
 	add_child(cam)
 	lanterna = Lanterna.new()
 	add_child(lanterna)
+	rifle = Rifle.new()
+	add_child(rifle)
 	_faz_bussola()
+	_faz_vapor()
+
+
+## bafo no ar gelado
+func _faz_vapor() -> void:
+	_vapor = GPUParticles3D.new()
+	_vapor.amount = 14
+	_vapor.lifetime = 1.7
+	_vapor.one_shot = true
+	_vapor.emitting = false
+	_vapor.explosiveness = 0.75
+	_vapor.local_coords = false
+	var m := ParticleProcessMaterial.new()
+	m.direction = Vector3(0, -0.05, -1)
+	m.spread = 16
+	m.initial_velocity_min = 0.25
+	m.initial_velocity_max = 0.6
+	m.damping_min = 0.3
+	m.damping_max = 0.5
+	m.gravity = Vector3(0.05, 0.10, 0)
+	m.scale_min = 0.10
+	m.scale_max = 0.22
+	m.scale_curve = Fx._curva([[0, 0.3], [1, 1.6]])
+	m.color_ramp = Fx._rampa([[0, Color(0.9, 0.94, 1.0, 0.0)], [0.15, Color(0.9, 0.94, 1.0, 0.10)], [1, Color(0.9, 0.94, 1.0, 0.0)]])
+	_vapor.process_material = m
+	var q := QuadMesh.new()
+	q.material = Mat.sprite(Color(1, 1, 1, 1))
+	_vapor.draw_pass_1 = q
+	_vapor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_vapor.position = Vector3(0, -0.16, -0.28)
+	cam.add_child(_vapor)
 
 
 func _faz_bussola() -> void:
@@ -155,7 +192,14 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e.is_action_pressed("gritar"):
 		gritar()
 	elif e.is_action_pressed("arremessar"):
-		arremessar()
+		if rifle.na_mao and rifle.tem and carrega == null: rifle.atirar(self)
+		else: arremessar()
+	elif e.is_action_pressed("arma"):
+		rifle.alternar()
+	elif e.is_action_pressed("guardar"):
+		if rifle.na_mao: rifle.alternar()
+	elif e.is_action_pressed("recarregar"):
+		rifle.recarregar()
 	elif e.is_action_pressed("curar"):
 		curar()
 
@@ -165,10 +209,13 @@ func gritar() -> void:
 
 
 func curar() -> void:
-	if vida > 95.0:
+	if vida > 95.0 and danos == 0:
 		Jogo.aviso.emit("Você não precisa de curativo agora")
 		return
 	if Jogo.gastar("curativo"):
+		if danos > 0:
+			danos -= 1
+			Jogo.flags["danos"] = danos
 		vida = minf(100.0, vida + 45.0)
 		Som.toca("papel", -4)
 		Jogo.aviso.emit("Você enfaixa o ferimento (%d restante)" % Jogo.tem("curativo"))
@@ -293,7 +340,7 @@ func _corpo(dt: float, corre: bool, chao: bool) -> void:
 		folego = minf(100.0, folego + dt * (11.0 if vh < 0.3 else 7.0) * (0.6 if frio > 70 else 1.0))
 		if folego > 32.0: _cansado = false
 	# frio
-	var ta: float = 0.085 * (0.45 if Jogo.tem("jaqueta") > 0 else 1.0)
+	var ta: float = 0.095 * (0.42 if Jogo.tem("jaqueta") > 0 else 1.0)
 	if na_agua: ta += 0.9
 	if corre: ta -= 0.06
 	if abrigado: ta = -0.15
@@ -332,18 +379,19 @@ func _sup() -> String:
 	if global_position.y > ty + 0.22:
 		if Vector2(global_position.x, global_position.z).distance_to(Mundo.TORRE) < 5.0:
 			return "p_madeira" if global_position.y > ty + 14.0 else "p_metal"
-		if Vector2(global_position.x, global_position.z).distance_to(Mundo.POSTO) > 25.0:
-			return "p_madeira"
+		return "p_madeira"
 	if na_agua: return "p_agua"
-	if Mundo.dist(Mundo.RODOVIA, global_position.x, global_position.z) < 4.3: return "p_asfalto"
-	if Vector2(global_position.x, global_position.z).distance_to(Mundo.POSTO) < 16.0: return "p_asfalto"
-	return "p_folha"
+	if Jogo.floresta and Jogo.floresta.vila and Jogo.floresta.vila.dentro_galpao(global_position): return "p_asfalto"
+	return "p_neve"
 
 
 func _som_passo(corre: bool) -> void:
 	var db := -17.0 if agachado else (-5.0 if corre else -10.0)
-	Som.varia(_sup(), 5, db, 0.10)
-	if corre and _sup() == "p_folha" and randf() < 0.05:
+	var sp := _sup()
+	Som.varia(sp, 5, db + (2.0 if sp == "p_neve" else 0.0), 0.10)
+	if sp == "p_neve":
+		Pegadas.por(Jogo.floresta, global_position, rotation.y, corre)
+	if corre and sp == "p_neve" and randf() < 0.05:
 		Som.varia("galho", 4, -8.0)
 		if Jogo.criatura: Jogo.criatura.ouvir(global_position, 38.0)
 	if _sup() == "p_madeira" and randf() < 0.12:
@@ -490,11 +538,16 @@ func _process(dt: float) -> void:
 		incl = lerp_angle(incl, asin(clampf(d.y, -1, 1)), minf(1.0, dt * 7.0))
 	cam.rotation = Vector3(incl + ch.y * 0.10 + sin(_bob * 2.0) * 0.0022 * _bob_amp, rotation.y + ch.x * 0.10, _roll + cos(_bob) * 0.0028 * _bob_amp + ch.z * 0.08)
 	var alvo_f := 72.0
-	if _ac("foco") and not travado: alvo_f = 46.0
+	if _ac("foco") and not travado: alvo_f = 46.0 if not rifle.na_mao else 50.0
 	elif Vector2(velocity.x, velocity.z).length() > 3.6: alvo_f = 78.0
 	_fov = lerpf(_fov, alvo_f - medo * 4.0, minf(1.0, dt * 6.0))
 	cam.fov = _fov
 	lanterna.atualiza(dt, cam, _bob * _bob_amp)
+	rifle.atualiza(dt, self, _bob * _bob_amp)
+	_t_vapor -= dt
+	if _t_vapor <= 0.0:
+		_t_vapor = lerpf(3.4, 1.3, maxf(medo, 1.0 - folego / 100.0))
+		if not abrigado and not travado: _vapor.restart()
 	# bussola
 	var quer := _ac("bussola") and Jogo.tem("bussola") > 0 and not travado
 	_bus_v = move_toward(_bus_v, 1.0 if quer else 0.0, dt * 4.0)

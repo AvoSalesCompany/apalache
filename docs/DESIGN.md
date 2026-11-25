@@ -18,7 +18,7 @@ antiga, e a frase "não, você não ouviu" veio de vídeos. O jogo não afirma q
 
 - **Dois cérebros** ([Game Developer](https://www.gamedeveloper.com/design/the-perfect-organism-the-ai-of-alien-isolation)):
   um diretor sabe onde você está e mede a pressão. A criatura só conhece o que vê e ouve. Aqui: `diretor.gd` e `criatura.gd`.
-- **Sem armas, visão limitada**: a ameaça não morre, só se evita.
+- **Quase sem armas, visão limitada**: só no cerco final existe um rifle, lento e com pouca munição.
 - **Som como ferramenta e risco**: correr, pisar em galho ou gritar atrai. Pedras distraem.
 - **Recursos curtos**: curativos, pedras, calor, fôlego.
 - **Interface mínima**: barras só aparecem quando importam.
@@ -34,19 +34,19 @@ antiga, e a frase "não, você não ouviu" veio de vídeos. O jogo não afirma q
 Dezenove a bordo, falta um: você. Os outros estão na mata, parados, altos demais, boca aberta demais.
 Não atacam. Somem quando encarados. A voz que chama sai deles.
 
-## Roteiro
+## Roteiro (v0.3)
 
-1. **Voo 609** — a luz na asa, a pane, a queda.
-2. **Destroços** — uma lanterna acesa no chão ilumina alguém acenando. Jaqueta, curativos, bússola e o desenho da criança.
-3. **Riacho** — "água sempre acaba em gente". A tábua com as regras e a primeira aparição.
-4. **Cabana** — caderno do guarda, fogão, chave. Três batidas na porta.
-5. **Cemitério** — todas as lápides com a mesma data. Uma cruz com o seu nome.
-6. **Torre 4** — o rádio responde. Depois responde outra coisa: "Eu estou subindo."
-7. **Estrada e ponte** — luzes falsas fora do caminho, perseguição final.
-8. **Rodovia** — uma caminhonete para. O motorista sabe o seu nome.
+0. **Voo 609** — conversa com a vizinha, revista, comissária com o lanche. Só depois a luz na asa, a pane e a queda.
+1. **Destroços, amanhecer** — acordar entre os mortos. Mochila com mapa, casaco, curativos, bússola, lanterna.
+2. **Trilha, de dia** — nenhum monstro. Bandos de pássaros fogem, altos, para o sul.
+3. **Cold Holler, tarde** — Caleb, Elias (a história dos montes), Hannah, Amos e Ruth, que dá abrigo. O sol se põe.
+4. **Duas e quarenta e sete** — os cachorros calam, passos no telhado, o ataque.
+5. **Fuga** — a trilha do cemitério até a Torre 4, com vultos e a criatura por perto, sem poder matar.
+6. **Torre 4** — a chave está na privada; o gerador, seco; a gasolina ficou na vila destruída.
+7. **Cerco** — depois do rádio ela pode matar: aparece, golpeia, some. Três golpes. Três tiros a matam.
+8. **Amanhecer** — a polícia sobe a estrada de serviço. "Não tem vila nenhuma nesta serra desde 1931."
 
-Finais: **Civilização** (seguir a pé até as luzes) e **Carona** (entrar na caminhonete).
-
+Finais: **Silêncio** (matou a criatura) e **Amanhecer** (aguentou até o sol nascer).
 ## Ideias para as próximas versões
 
 - Vozes humanas gravadas; nome do jogador escolhido no começo.

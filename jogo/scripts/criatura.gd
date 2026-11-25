@@ -27,7 +27,7 @@ const OSSOS := [
 	["jarrete_d", "joelho_d", Vector3(0.17, 0.42, 0.74)],
 ]
 
-enum E { OCULTO, OBSERVA, RONDA, INVESTIGA, CACA, PROCURA, RECUA, ATAQUE, TORRE }
+enum E { OCULTO, OBSERVA, RONDA, INVESTIGA, CACA, PROCURA, RECUA, ATAQUE, TORRE, MORTA }
 
 signal pegou
 signal mudou(estado: int)
@@ -61,6 +61,9 @@ var livre_ate := 0.0
 var rumo := 0.0
 var _pontos: Array = []        # pontos de ronda
 var torre_t := 0.0
+var vidas := 3
+var morta := false
+var _queda := 0.0
 
 
 func _ready() -> void:
@@ -164,6 +167,49 @@ func colocar(p: Vector3, olhar: Vector3) -> void:
 	reset_physics_interpolation()
 
 
+## levou um tiro
+func baleada(p: Vector3) -> void:
+	if morta or estado in [E.OCULTO, E.MORTA]:
+		return
+	vidas -= 1
+	Fx.sangue(Jogo.floresta, Mundo.chao(global_position.x, global_position.z), randf_range(0.9, 1.5))
+	Som.em("cr_grito%d" % randi_range(1, 2), global_position + Vector3.UP * 2, 12.0, 260, 1.15 if vidas > 0 else 0.65, "Eco", 22.0)
+	Som.em("cr_ataque", p, 4.0, 60)
+	Jogo.diretor.depois_do_golpe()
+	if vidas <= 0:
+		morrer()
+	else:
+		Jogo.aviso.emit("Acertou. Ela sangra.  (%d de 3)" % (3 - vidas))
+		estado = E.OBSERVA
+		muda(E.RECUA)
+		t_estado = 0.9
+		livre_ate = Time.get_ticks_msec() / 1000.0 + 4.0
+
+
+func morrer() -> void:
+	estado = E.MORTA
+	t_estado = 0.0
+	_queda = 0.0
+	vel = 0.0
+	em_pe_alvo = 0.35
+	Jogo.diretor.cerco = false
+	Som.toca("stinger2", -2)
+	Som.em("v_coro", global_position + Vector3.UP, 8.0, 120, 0.7, "Eco", 16.0)
+	Jogo.aviso.emit("Ela caiu.")
+
+
+func _morrendo(dt: float) -> void:
+	_queda = minf(1.0, _queda + dt * 0.8)
+	rotation.z = lerpf(0.0, 1.35, smoothstep(0.0, 1.0, _queda))
+	global_position.y = lerpf(global_position.y, Mundo.altura(global_position.x, global_position.z) + 0.25 * _queda if not Jogo.historia._na_torre else global_position.y, minf(1.0, dt * 4.0))
+	torce_alvo = sin(t_estado * 9.0) * (1.0 - clampf(t_estado / 3.0, 0, 1))
+	mat_pele.set_shader_parameter("dissolve", clampf((t_estado - 3.5) / 4.0, 0.0, 1.0) * 1.0)
+	if t_estado > 3.0: morta = true
+	if t_estado > 8.0:
+		rotation.z = 0.0
+		esconder()
+
+
 func dist_jog() -> float:
 	return global_position.distance_to(Jogo.jogador.global_position) if Jogo.jogador else 999.0
 
@@ -226,7 +272,7 @@ func _sentir(dt: float) -> void:
 
 ## barulho pontual (pedra, grito, galho)
 func ouvir(p: Vector3, alcance: float, forte: bool = false) -> void:
-	if estado in [E.OCULTO, E.CACA, E.ATAQUE, E.RECUA, E.TORRE] or Jogo.etapa < 4:
+	if estado in [E.OCULTO, E.CACA, E.ATAQUE, E.RECUA, E.TORRE, E.MORTA] or Jogo.etapa < 4:
 		return
 	if global_position.distance_to(p) < alcance:
 		ultimo_visto = p
@@ -247,6 +293,9 @@ func _physics_process(dt: float) -> void:
 		E.PROCURA: _procura(dt)
 		E.RECUA: _recua(dt)
 		E.ATAQUE: vel = 0.0
+		E.MORTA:
+			_morrendo(dt)
+			return
 		E.TORRE: pass
 	if estado in [E.RONDA, E.INVESTIGA, E.CACA, E.PROCURA]:
 		_sentir(dt)

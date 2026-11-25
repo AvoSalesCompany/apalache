@@ -16,6 +16,9 @@ var _tm := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if Teste.a.get("prova", "") == "gente":
+		add_child(load("res://scripts/prova_gente.gd").new())
+		return
 	hud = Hud.new()
 	add_child(hud)
 	menu = Menu.new()
@@ -109,7 +112,7 @@ func _ao_menu() -> void:
 
 func _camera_menu(dt: float) -> void:
 	_tm += dt
-	var p := Mundo.chaov(Vector2(-207, -146)) + Vector3(0, 2.1, 0)
+	var p := Mundo.chaov(Vector2(-216, -150)) + Vector3(0, 2.1, 0)
 	p += Vector3(sin(_tm * 0.07) * 1.6, sin(_tm * 0.11) * 0.2, cos(_tm * 0.05) * 1.2)
 	cam_menu.global_position = p
 	var d := Mundo.LUA
@@ -143,6 +146,7 @@ func _caiu(protegido: bool) -> void:
 	fl.visible = true
 	fase = "floresta"
 	Jogo.vida_salva = 88.0 if protegido else 62.0
+	if Jogo.flags.has("lanche") and not Jogo.flags.get("comeu", false): Jogo.dar("lanche")
 	jog.visible = true
 	jog.cam.current = true
 	var a: Node3D = fl.locais.nos["acorda"]
@@ -217,6 +221,7 @@ func _teste() -> void:
 		av.iniciar()
 		hud.preto = 0.0
 		hud.preto_alvo = 0.0
+		av.pre = false
 		var alvo := Teste.num("t", 10.0)
 		var passos := int(alvo / 0.05)
 		for i in passos:
@@ -226,11 +231,7 @@ func _teste() -> void:
 		av.pitch = deg_to_rad(ol.y)
 		if Teste.a.has("foto"): Teste.fotografar()
 		return
-	if Teste.a.has("previa"):
-		var pv = load("res://scripts/previa.gd").new()
-		pv.pr = self
-		add_child(pv)
-		return
+
 	if Teste.a.has("robo"):
 		fase = "floresta"
 		var r = load("res://scripts/robo.gd").new()
@@ -255,13 +256,6 @@ func _teste() -> void:
 		cri.em_pe_alvo = Teste.num("pe", 0.0)
 		cri.em_pe = Teste.num("pe", 0.0)
 		cri.set_physics_process(false)
-	if Teste.a.has("fogao"): his._luz_fogao()
-	if Teste.a.has("camin"):
-		fl.locais.caminhonete.visible = true
-		var x := Teste.num("camin", 300)
-		var z := fl.locais._z_rod(x) - 1.7
-		fl.locais.caminhonete.global_position = Vector3(x, Mundo.altura(x, z) + 0.12, z)
-		fl.locais.caminhonete.rotation.y = -PI * 0.5
 	if Teste.a.has("foto"):
 		Teste.fotografar()
 
@@ -274,8 +268,22 @@ func teste_cena(q: Dictionary) -> void:
 			fl.visible = false
 			av.visible = true
 			av.iniciar()
-		while av.t < float(q.t):
-			av._process(0.05)
+		if float(q.t) >= 0.0:
+			av.pre = false
+			while av.t < float(q.t):
+				av._process(0.05)
+		else:
+			av.pre = true
+			while av.tp < -float(q.t):
+				av._process(0.05)
+				av.com._process(0.05)
+				for g in av._passag: g._process(0.05)
+			if q.has("serve"):
+				av._chegou_com()
+				av.com.giro_alvo = -PI * 0.5 - 0.25
+				for k in 60: av.com._process(0.05)
+				av.bandeja.visible = true
+				Itens.lanche(av.prato, "sanduiche")
 		av.yaw = deg_to_rad(float(q.olhar[0]))
 		av.pitch = deg_to_rad(float(q.olhar[1]))
 		return
@@ -302,14 +310,70 @@ func teste_cena(q: Dictionary) -> void:
 			fl.add_child(vg)
 			vg.por(Vector3(float(pv[0]), 0, float(pv[1])), jog.global_position)
 			Jogo.anomalias.ativos.append(vg)
-	if q.has("fogao"): his._luz_fogao()
+	fl.clima.por(float(q.get("hora", 12.0)))
+	fl.clima.neve = float(q.get("neve", 0.3))
+	fl.clima.neve_alvo = fl.clima.neve
+	for k in q.get("desliga", []):
+		match k:
+			"sombra": fl.lua.shadow_enabled = false
+			"ang": fl.clima.set_meta("ang0", true)
+			"d60": fl.lua.directional_shadow_max_distance = 60.0
+			"s2": fl.lua.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+			"atlas": RenderingServer.directional_shadow_atlas_set_size(2048, true)
+			"lod1":
+				for g in fl.find_children("*", "MultiMeshInstance3D", true, false):
+					if g.has_meta("nv") and g.get_meta("nv") == 1: g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			"vol": fl.env.volumetric_fog_enabled = false
+			"ssao": fl.env.ssao_enabled = false
+			"glow": fl.env.glow_enabled = false
+			"raios": fl.raios.visible = false
+			"gente":
+				for g in fl.find_children("*", "Skeleton3D", true, false): g.visible = false
+			"veg":
+				for g in fl.find_children("*", "MultiMeshInstance3D", true, false): g.visible = false
+			"neve": fl.ar.visible = false
+			"luzes":
+				for g in fl.find_children("*", "OmniLight3D", true, false): g.visible = false
+				for g in fl.find_children("*", "SpotLight3D", true, false): g.visible = false
+			"terreno":
+				for g in fl.get_children():
+					if g is MeshInstance3D and g != fl.raios: g.visible = false
+	if q.has("destruir"): fl.vila.destruir()
+	if q.has("torre"): his._liga_torre(true)
+	if q.has("inv"): hud.inv.abre(q.inv)
+	elif hud.inv.visible: hud.inv.fecha()
+	if q.has("rifle"):
+		Jogo.itens["rifle"] = 1
+		jog.rifle.pegar()
+		jog.travado = false
+	if q.has("abre"):
+		(fl.locais.nos["porta_banheiro"] as Node3D).rotation.y = -1.9
+		fl.locais.portao.rotation.y = -1.7
+		fl.vila.porta_ruth.rotation.y = 1.9
+	if q.has("revoada"): Passaros.revoada(fl, Vector3(float(q.revoada[0]), float(q.revoada[1]), float(q.revoada[2])), 30, Vector3(0.3, 0.3, 1.0))
+	if q.has("viatura"):
+		for k in 2:
+			var vv: Node3D = fl.locais.viaturas[k]
+			vv.visible = true
+			vv.global_position = Mundo.chao(183 + k * 5.0, -47 + k * 9.0)
+			vv.rotation.y = 0.7
+	if q.has("em"):
+		# posicao relativa a um lugar: [no, x, y, z] e olhar para [x, y, z] do mesmo no
+		var base: Node3D = {"fuselagem": fl.locais.nos["fuselagem"], "torre": fl.locais.nos["torre"], "banheiro": fl.locais.nos["banheiro"], "gerador": fl.locais.nos["gerador"], "casa": fl.vila.casas.ruth, "galpao": fl.vila.casas.galpao, "vila": fl.vila}.get(q.em[0], fl.vila)
+		if q.em[0] in fl.vila.gente: base = fl.vila.gente[q.em[0]]
+		var w := base.to_global(Vector3(float(q.em[1]), float(q.em[2]), float(q.em[3])))
+		var a := base.to_global(Vector3(float(q.para[0]), float(q.para[1]), float(q.para[2])))
+		var d := a - (w + Vector3.UP * 1.64)
+		q["pos"] = [w.x, w.z]
+		q["y"] = w.y
+		q["olhar"] = [rad_to_deg(atan2(-d.x, -d.z)), rad_to_deg(atan2(d.y, Vector2(d.x, d.z).length()))]
 	var x := float(q.pos[0])
 	var z := float(q.pos[1])
 	var y: float = float(q.y) if q.has("y") else Mundo.altura(x, z) + float(q.get("alt", 0.1))
 	jog.por_em(Vector3(x, y, z), deg_to_rad(float(q.olhar[0])))
 	jog.set_physics_process(not (q.has("alt") or q.has("y")))
 	jog.incl = deg_to_rad(float(q.olhar[1]))
-	jog.robo = {"bussola": q.has("bussola")}
+	jog.robo = {"bussola": q.has("bussola"), "foco": q.has("foco")}
 	jog.cam.current = true
 	fl.firmar(jog.global_position)
 	cri.esconder()
@@ -327,9 +391,4 @@ func teste_cena(q: Dictionary) -> void:
 		fl.add_child(lp)
 		lp.global_position = jog.cam.global_position + Vector3(0.6, 0.5, 0)
 		get_tree().create_timer(1.6).timeout.connect(lp.queue_free)
-	if q.has("camin"):
-		fl.locais.caminhonete.visible = true
-		var cx := float(q.camin)
-		var cz := fl.locais._z_rod(cx) - 1.7
-		fl.locais.caminhonete.global_position = Vector3(cx, Mundo.altura(cx, cz) + 0.12, cz)
-		fl.locais.caminhonete.rotation.y = -PI * 0.5
+	pass

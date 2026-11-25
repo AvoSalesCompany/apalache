@@ -36,6 +36,7 @@ static func folha(png: String, tinta: Color, trans: float, corte: float = 0.42, 
 		m.set_shader_parameter("rug", rug)
 		m.set_shader_parameter("vento", vento)
 		m.set_shader_parameter("mip_comp", mip)
+		m.set_shader_parameter("neve", {"fol_conifera.png": 0.62, "fol_galhos.png": 0.26, "fol_secas.png": 0.35, "fol_rododendro.png": 0.55, "fol_capim.png": 0.30}.get(png, 0.5))
 		_c[k] = m
 	return _c[k]
 
@@ -94,6 +95,74 @@ static func placa(png: String, emis: float = 0.0, rug: float = 0.8) -> StandardM
 			m.emission_energy_multiplier = emis
 		_c[k] = m
 	return _c[k]
+
+
+## PBR com neve acumulada em cima (so para o lado de fora)
+static func pbrn(base: String, esc: float = 1.0, tinta: Color = Color.WHITE, rug: float = 1.0, metal: float = 0.0, quanta: float = 0.9) -> ShaderMaterial:
+	var k := "pbrn%s%s%s%s%s%s" % [base, esc, tinta, rug, metal, quanta]
+	if not _c.has(k):
+		var m := ShaderMaterial.new()
+		m.shader = load("res://shaders/neve_obj.gdshader")
+		m.set_shader_parameter("cor", tex(base + "_cor.jpg"))
+		m.set_shader_parameter("nor", tex(base + "_nor.jpg"))
+		m.set_shader_parameter("arm", tex(base + "_arm.jpg"))
+		m.set_shader_parameter("tinta", tinta)
+		m.set_shader_parameter("rug", rug)
+		m.set_shader_parameter("metal", metal)
+		m.set_shader_parameter("esc", esc)
+		m.set_shader_parameter("quanta", quanta)
+		_c[k] = m
+	return _c[k]
+
+
+static func neve_lisa(cor: Color = Color(0.86, 0.90, 0.95)) -> ShaderMaterial:
+	var k := "nevelisa%s" % cor
+	if not _c.has(k):
+		var m := ShaderMaterial.new()
+		m.shader = load("res://shaders/neve_obj.gdshader")
+		m.set_shader_parameter("cor", tex("snow_02_cor.jpg"))
+		m.set_shader_parameter("nor", tex("snow_02_nor.jpg"))
+		m.set_shader_parameter("tinta", cor)
+		m.set_shader_parameter("rug", 0.75)
+		_c[k] = m
+	return _c[k]
+
+
+## versao nevada de um material de modelo
+static func nevada(o: Material, quanta: float = 0.85) -> Material:
+	if not (o is BaseMaterial3D):
+		return o
+	var k := "nevada%s%s" % [o.get_instance_id(), quanta]
+	if not _c.has(k):
+		var b := o as BaseMaterial3D
+		var rec := b.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+		var m := ShaderMaterial.new()
+		m.shader = load("res://shaders/neve_rec.gdshader" if rec else "res://shaders/neve_obj.gdshader")
+		if b.albedo_texture: m.set_shader_parameter("cor", b.albedo_texture)
+		if b.normal_texture: m.set_shader_parameter("nor", b.normal_texture)
+		if b.roughness_texture: m.set_shader_parameter("arm", b.roughness_texture)
+		m.set_shader_parameter("tinta", b.albedo_color)
+		m.set_shader_parameter("quanta", quanta)
+		_c[k] = m
+	return _c[k]
+
+
+static func nevar(me: Mesh, quanta: float = 0.85) -> Mesh:
+	var k := "nevar%s%s" % [me.get_instance_id(), quanta]
+	if not _c.has(k):
+		var n: Mesh = me.duplicate()
+		for i in n.get_surface_count():
+			n.surface_set_material(i, nevada(me.surface_get_material(i), quanta))
+		_c[k] = n
+	return _c[k]
+
+
+## cobre de neve todas as malhas de um no
+static func nevar_no(no: Node, quanta: float = 0.85) -> void:
+	if no is MeshInstance3D and no.mesh:
+		for i in no.mesh.get_surface_count():
+			no.set_surface_override_material(i, nevada(no.get_active_material(i), quanta))
+	for f in no.get_children(): nevar_no(f, quanta)
 
 
 ## Particula de fumaca/fogo

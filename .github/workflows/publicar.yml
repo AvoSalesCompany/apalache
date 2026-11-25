@@ -1,0 +1,109 @@
+# Monta o jogo e o instalador e publica em Releases.
+# So roda quando uma tag de versao e enviada (ex.: v0.2.0).
+name: Publicar jogo
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  GODOT: 4.7.2-stable
+  GODOT_PASTA: 4.7.2.stable
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar Godot e conferir
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $b = "https://github.com/godotengine/godot/releases/download/$env:GODOT"
+          New-Item -ItemType Directory -Force C:\g | Out-Null
+          $ed = "Godot_v$($env:GODOT)_win64.exe.zip"
+          $tp = "Godot_v$($env:GODOT)_export_templates.tpz"
+          foreach ($f in 'SHA512-SUMS.txt', $ed, $tp) { curl.exe -sSL --fail --retry 3 -o "C:\g\$f" "$b/$f"; if ($LASTEXITCODE) { throw "falhou: $f" } }
+          foreach ($f in $ed, $tp) {
+            $certo = ((Select-String -Path C:\g\SHA512-SUMS.txt -Pattern ([regex]::Escape($f) + '$')).Line -split '\s+')[0]
+            if ((Get-FileHash -Algorithm SHA512 "C:\g\$f").Hash.ToLower() -ne $certo) { throw "hash errado: $f" }
+          }
+          Expand-Archive "C:\g\$ed" C:\g\godot
+          $dest = "$env:APPDATA\Godot\export_templates\$env:GODOT_PASTA"
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $z = [IO.Compression.ZipFile]::OpenRead("C:\g\$tp")
+          foreach ($n in 'version.txt', 'windows_release_x86_64.exe', 'windows_debug_x86_64.exe') {
+            $e = $z.Entries | Where-Object { $_.Name -eq $n } | Select-Object -First 1
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($e, "$dest\$n", $true)
+          }
+          $z.Dispose()
+
+      - name: Importar e exportar
+        run: |
+          $g = (Get-ChildItem C:\g\godot -Filter '*console.exe').FullName
+          New-Item -ItemType Directory -Force build | Out-Null
+          & $g --path jogo --headless --import
+          & $g --path jogo --headless --export-release Windows "$pwd\build\HOLLER.exe"
+          $t = (Get-Item build\HOLLER.exe).Length
+          "tamanho: $([math]::Round($t / 1MB)) MB"
+          if ($t -lt 250MB) { throw 'executavel incompleto' }
+
+      - name: Testar se o jogo abre
+        run: |
+          $p = Start-Process build\HOLLER.exe -ArgumentList '--headless', '--quit-after', '900' -PassThru -RedirectStandardError erro.txt
+          $h = $p.Handle
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'nao terminou' }
+          Get-Content erro.txt
+          if ($p.ExitCode -ne 0) { throw "codigo $($p.ExitCode)" }
+          if (Select-String -Path erro.txt -Pattern 'SCRIPT ERROR|Parse Error|Failed to load' -Quiet) { throw 'erro de script' }
+
+      - name: Montar instalador
+        run: |
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc "/DVersao=$($env:GITHUB_REF_NAME.TrimStart('v'))" instalador\holler.iss
+          if ($LASTEXITCODE) { throw 'instalador falhou' }
+          Get-Item build\HOLLER-Instalador.exe | Select-Object Name, Length
+
+      - name: Testar instalador (instala, confere o icone, desinstala)
+        run: |
+          Start-Process build\HOLLER-Instalador.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER' -Wait
+          $app = Get-ChildItem "$env:LOCALAPPDATA\Programs\HOLLER\HOLLER.exe"
+          $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'HOLLER.lnk'
+          if (-not (Test-Path $lnk)) { throw "sem icone na area de trabalho: $lnk" }
+          $alvo = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
+          "icone: $lnk -> $alvo"
+          if ($alvo -ne $app.FullName) { throw 'icone aponta para o lugar errado' }
+          $p = Start-Process $alvo -ArgumentList '--headless', '--quit-after', '300' -PassThru
+          $h = $p.Handle
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'jogo instalado nao abriu' }
+          if ($p.ExitCode -ne 0) { throw "codigo $($p.ExitCode)" }
+          Start-Process "$env:LOCALAPPDATA\Programs\HOLLER\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait
+
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $notas = @"
+          ## Como instalar
+          1. Baixe **HOLLER-Instalador.exe** aqui embaixo.
+          2. Abra o arquivo. Se o Windows avisar que o aplicativo é desconhecido, clique em **Mais informações** e em **Executar assim mesmo** (o jogo ainda não tem assinatura digital).
+          3. Clique em **Instalar**. O ícone do HOLLER aparece na área de trabalho: é só clicar e jogar.
+
+          Precisa de Windows 10 ou 11 (64 bits) e placa de vídeo com Vulkan. Use fones de ouvido.
+          "@
+          Set-Content notas.md $notas -Encoding utf8
+          gh release create $tag build\HOLLER-Instalador.exe --title "HOLLER $tag" --notes-file notas.md --latest
+          if ($LASTEXITCODE) { throw 'publicacao falhou' }

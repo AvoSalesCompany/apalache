@@ -6,6 +6,15 @@ Outubro de 1987. O voo 609 cai de madrugada no meio dos montes Apalaches. As pol
 estão vazias, os cintos continuam afivelados e alguma coisa na mata já sabe o seu nome.
 A lua mal entra na mata e a lanterna não dura para sempre. Ache a civilização.
 
+<p align="center">
+  <a href="https://github.com/AvoSalesCompany/apalache/releases/latest/download/HOLLER-Instalador.exe">
+    <img src="docs/baixar.svg" alt="Baixar o jogo HOLLER para Windows" width="460">
+  </a>
+</p>
+<p align="center">
+  Baixe, abra o instalador e clique no ícone <b>HOLLER</b> na área de trabalho. Windows 10 ou 11 (64 bits).
+</p>
+
 ![Menu](docs/menu.jpg)
 
 | | |
@@ -15,7 +24,13 @@ A lua mal entra na mata e a lanterna não dura para sempre. Ache a civilização
 
 ## Como jogar
 
-**Jogar pronto:** baixe `HOLLER.exe` na página de *Releases*, quando houver uma publicada.
+**Jogar pronto:**
+1. Clique no botão **Baixar o jogo** aqui em cima.
+2. Abra o `HOLLER-Instalador.exe`. Se o Windows avisar que o aplicativo é desconhecido, clique em
+   **Mais informações** e depois em **Executar assim mesmo** (o jogo ainda não tem assinatura digital).
+3. Clique em **Instalar**. O ícone do HOLLER aparece na área de trabalho: é só clicar e jogar.
+
+Precisa de placa de vídeo com Vulkan. Ficou lento? *Esc → Opções → Qualidade: Baixa*.
 
 **Pelo código:**
 1. Baixe o [Godot 4.7.2](https://godotengine.org/download) (versão padrão, 64 bits).
@@ -61,7 +76,9 @@ jogo/            projeto Godot
   som/           áudio sintetizado
   dados/         mundo pré-calculado
   ferr/          ferramenta que recalcula o mundo
-ferramentas/     scripts que baixam assets e geram áudio e folhagem
+ferramentas/     scripts que baixam assets e geram áudio, folhagem e ícone
+instalador/      instalador do Windows (Inno Setup)
+.github/         monta e publica o jogo quando uma versão é marcada
 docs/            design, pesquisa e imagens
 ```
 
@@ -93,7 +110,14 @@ Robô que joga a partida inteira e relata onde travou:
 godot --path jogo -- robo=1 vel=3
 ```
 
-Exportar o `.exe`: no Godot, *Editor → Gerenciar modelos de exportação*, depois *Projeto → Exportar → Windows*.
+Publicar uma versão nova (o GitHub monta o instalador e atualiza o botão de download sozinho):
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+Exportar o `.exe` no seu PC: no Godot, *Editor → Gerenciar modelos de exportação*, depois *Projeto → Exportar → Windows*.
 
 ## Créditos e licenças
 

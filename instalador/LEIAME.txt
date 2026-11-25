@@ -1,0 +1,24 @@
+﻿HOLLER - não responda
+==========================
+
+COMO JOGAR
+  WASD ................ andar
+  Mouse ............... olhar
+  Shift ............... correr
+  Ctrl ................ agachar (esconda-se nas moitas)
+  Espaço .............. pular / proteger a cabeça no avião
+  E ................... usar, pegar e soltar objetos
+  F ................... lanterna
+  Clique esquerdo ..... arremessar
+  Botão direito ....... focar a visão
+  C ................... segurar a bússola
+  H ................... usar curativo
+  Q ................... gritar por socorro (pense bem)
+  Tab ................. caderno
+  Esc ................. pausa
+
+DICAS
+  Use fones de ouvido. Se o mato calar, ele está perto.
+  Ficou lento? Esc > Opções > Qualidade: Baixa.
+
+Para desinstalar: Configurações do Windows > Aplicativos > HOLLER.
